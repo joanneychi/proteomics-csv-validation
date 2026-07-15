@@ -1,0 +1,44 @@
+# Python environments
+.venv/
+venv/
+env/
+
+# Python caches and test artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Build and packaging artifacts
+build/
+dist/
+*.egg-info/
+
+# Generated reports
+reports/
+
+# Local configuration and credentials
+.env
+.env.*
+*.pem
+*.key
+credentials*
+secrets*
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+._*
+__MACOSX/
+Thumbs.db
+desktop.ini
+
+# Temporary and backup files
+*.tmp
+*.temp
+*.bak
+*.swp
+*~

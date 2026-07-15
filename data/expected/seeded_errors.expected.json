@@ -1,0 +1,172 @@
+{
+  "fixture_schema_version": "1.0.0",
+  "input_name": "seeded_errors.csv",
+  "descriptor_schema_version": "1.0.0",
+  "profile_id": "proteomics_processed_sample_summary",
+  "profile_version": "0.1.0",
+  "status": "completed",
+  "rows": 8,
+  "configured_rules": [
+    {
+      "rule_id": "ingestion.input_limits",
+      "rule_version": "1.0.0"
+    },
+    {
+      "rule_id": "ingestion.csv_parse",
+      "rule_version": "1.0.0"
+    },
+    {
+      "rule_id": "schema.required_column",
+      "rule_version": "1.0.0"
+    },
+    {
+      "rule_id": "identifier.sample_id_required",
+      "rule_version": "1.0.0"
+    },
+    {
+      "rule_id": "identifier.sample_id_unique",
+      "rule_version": "1.0.0"
+    }
+  ],
+  "summary": {
+    "total_findings": 4,
+    "category_counts": [
+      {
+        "category": "ingestion",
+        "count": 0
+      },
+      {
+        "category": "schema",
+        "count": 1
+      },
+      {
+        "category": "identifier",
+        "count": 3
+      }
+    ],
+    "code_counts": [
+      {
+        "code": "SCHEMA_MISSING_REQUIRED_COLUMN",
+        "count": 1
+      },
+      {
+        "code": "IDENTIFIER_DUPLICATE_SAMPLE_ID",
+        "count": 2
+      },
+      {
+        "code": "IDENTIFIER_MISSING_SAMPLE_ID",
+        "count": 1
+      }
+    ],
+    "severity_counts": [
+      {
+        "severity": "error",
+        "count": 4
+      },
+      {
+        "severity": "warning",
+        "count": 0
+      },
+      {
+        "severity": "information",
+        "count": 0
+      }
+    ],
+    "scope_counts": [
+      {
+        "scope": "file",
+        "count": 1
+      },
+      {
+        "scope": "row",
+        "count": 3
+      }
+    ]
+  },
+  "findings": [
+    {
+      "code": "SCHEMA_MISSING_REQUIRED_COLUMN",
+      "category": "schema",
+      "severity": "error",
+      "scope": "file",
+      "rule": {
+        "rule_id": "schema.required_column",
+        "rule_version": "1.0.0"
+      },
+      "location": {
+        "row_number": null,
+        "field_name": "study_id"
+      },
+      "entity": null,
+      "observed_value": null,
+      "expected_value": "study_id"
+    },
+    {
+      "code": "IDENTIFIER_DUPLICATE_SAMPLE_ID",
+      "category": "identifier",
+      "severity": "error",
+      "scope": "row",
+      "rule": {
+        "rule_id": "identifier.sample_id_unique",
+        "rule_version": "1.0.0"
+      },
+      "location": {
+        "row_number": 4,
+        "field_name": "sample_id"
+      },
+      "entity": {
+        "entity_type": "processed_sample_summary",
+        "key_parts": [
+          {
+            "field_name": "sample_id",
+            "value": "S003"
+          }
+        ]
+      },
+      "observed_value": "S003",
+      "expected_value": "unique_within_input_file"
+    },
+    {
+      "code": "IDENTIFIER_DUPLICATE_SAMPLE_ID",
+      "category": "identifier",
+      "severity": "error",
+      "scope": "row",
+      "rule": {
+        "rule_id": "identifier.sample_id_unique",
+        "rule_version": "1.0.0"
+      },
+      "location": {
+        "row_number": 5,
+        "field_name": "sample_id"
+      },
+      "entity": {
+        "entity_type": "processed_sample_summary",
+        "key_parts": [
+          {
+            "field_name": "sample_id",
+            "value": "S003"
+          }
+        ]
+      },
+      "observed_value": "S003",
+      "expected_value": "unique_within_input_file"
+    },
+    {
+      "code": "IDENTIFIER_MISSING_SAMPLE_ID",
+      "category": "identifier",
+      "severity": "error",
+      "scope": "row",
+      "rule": {
+        "rule_id": "identifier.sample_id_required",
+        "rule_version": "1.0.0"
+      },
+      "location": {
+        "row_number": 9,
+        "field_name": "sample_id"
+      },
+      "entity": null,
+      "observed_value": "",
+      "expected_value": "nonmissing"
+    }
+  ]
+}
