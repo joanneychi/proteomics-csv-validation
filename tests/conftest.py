@@ -136,6 +136,22 @@ def seeded_input_path(
 @pytest.fixture(
     scope="session"
 )
+def required_value_missing_input_path(
+    repository_root: Path,
+) -> Path:
+    """Return the reviewed required-value input."""
+
+    return (
+        repository_root
+        / "data"
+        / "synthetic"
+        / "required_value_missing_values.csv"
+    )
+
+
+@pytest.fixture(
+    scope="session"
+)
 def default_profile() -> ProfileDefinition:
     """Return the installed built-in profile."""
 
@@ -158,6 +174,47 @@ def loaded_seeded_expected(
         / "data"
         / "expected"
         / "seeded_errors.expected.json"
+    )
+
+    loaded = json.loads(
+        path.read_text(
+            encoding="utf-8"
+        ),
+        object_pairs_hook=(
+            _strict_object
+        ),
+        parse_constant=(
+            _reject_constant
+        ),
+    )
+
+    frozen = _freeze(
+        loaded
+    )
+
+    assert isinstance(
+        frozen,
+        Mapping,
+    )
+
+    return frozen
+
+@pytest.fixture(
+    scope="session"
+)
+def loaded_required_value_missing_expected(
+    repository_root: Path,
+) -> Mapping[
+    str,
+    object,
+]:
+    """Return the strict frozen required-value expected-results fixture."""
+
+    path = (
+        repository_root
+        / "data"
+        / "expected"
+        / "required_value_missing_values.expected.json"
     )
 
     loaded = json.loads(

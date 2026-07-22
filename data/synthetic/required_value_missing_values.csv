@@ -1,0 +1,9 @@
+study_id,sample_id,experimental_condition,sample_preparation_batch,quantified_protein_group_count,protein_group_intensity_sum
+STUDY001,S001,control,PREP01,1452,125000000.0
+STUDY001,S002,,PREP01,1478,128500000.0
+STUDY001,S003,treatment,PREP01,1491,132100000.0
+STUDY001,S004,treatment,"   ",1503,134700000.0
+STUDY001,S005,control,PREP02,1461,126800000.0
+STUDY001,S006,control,PREP02,1486,
+STUDY001,S007,treatment,PREP02,1512,136200000.0
+STUDY001,S008,treatment,PREP02,1498,133800000.0

@@ -332,7 +332,7 @@ def render_markdown_report(
     else:
         lines.extend(
             [
-                "No schema or identifier findings were detected under the configured rules.",
+                "No validation findings were detected under the configured rules.",
                 "",
             ]
         )
@@ -341,11 +341,11 @@ def render_markdown_report(
         [
             "## Technical interpretation",
             "",
-            "The report records deterministic structural and identifier findings for technical review. A completed run with findings is not an automatic rejection decision. A stopped run means downstream validators were not applied after a fatal ingestion condition.",
+            "The report records deterministic data-quality findings under the configured rules for technical review. A completed run with findings does not assign an acceptance decision. A stopped run indicates that a fatal ingestion condition ended the validation workflow before downstream validators ran.",
             "",
             "## Data and scope boundary",
             "",
-            "The reviewed records are synthetic. The prototype evaluates CSV structure and sample identifiers under the named profile and rule versions. It does not process raw LC-MS data, normalize measurements, conduct statistical analysis, interpret biological or clinical meaning, establish repository conformance, or perform production deployment.",
+            "The reviewed records are synthetic. The prototype evaluates CSV structure, sample identifiers, and required non-key values under the named profile and rule versions. The prototype does not process raw LC-MS data, normalize measurements, conduct statistical analysis, interpret biological or clinical meaning, establish repository conformance, or perform production deployment.",
         ]
     )
 

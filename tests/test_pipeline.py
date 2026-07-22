@@ -67,6 +67,10 @@ _EXPECTED_COMPLETED_RULES: Final = (
         "identifier.sample_id_unique",
         "1.0.0",
     ),
+    (
+        "missingness.required_value",
+        "1.0.0",
+    ),
 )
 
 _EXPECTED_INGESTION_RULES: Final = (
@@ -332,6 +336,10 @@ def test_baseline_validation_is_completed_without_findings(
             "identifier",
             0,
         ),
+        (
+            "missingness",
+            0,
+        ),
     )
 
     assert _severity_counts(
@@ -527,6 +535,10 @@ def test_seeded_validation_produces_exact_four_findings(
             "identifier",
             3,
         ),
+        (
+            "missingness",
+            0,
+        ),
     )
 
     assert _severity_counts(
@@ -659,6 +671,10 @@ def test_accessible_fatal_input_returns_stopped_result(
         ),
         (
             "identifier",
+            0,
+        ),
+        (
+            "missingness",
             0,
         ),
     )

@@ -874,6 +874,155 @@ def test_seeded_result_matches_expected_fixture_exactly(
     )
 
 
+
+def test_required_value_missingness_result_matches_expected_fixture_exactly(
+    required_value_missing_input_path: Path,
+    default_profile: ProfileDefinition,
+    loaded_required_value_missing_expected: Mapping[
+        str,
+        object,
+    ],
+) -> None:
+    """Required-value missingness evidence exactly matches its reviewed oracle."""
+
+    source_before = (
+        required_value_missing_input_path
+        .read_bytes()
+    )
+
+    first = validate_input(
+        required_value_missing_input_path,
+        default_profile,
+    )
+
+    second = validate_input(
+        required_value_missing_input_path,
+        default_profile,
+    )
+
+    assert first == second
+
+    assert (
+        _result_projection(
+            first
+        )
+        ==
+        _thaw_json_value(
+            loaded_required_value_missing_expected
+        )
+    )
+
+    assert (
+        _result_projection(
+            second
+        )
+        ==
+        _result_projection(
+            first
+        )
+    )
+
+    assert (
+        required_value_missing_input_path
+        .read_bytes()
+        == source_before
+    )
+
+
+def test_required_value_missingness_console_process_publishes_expected_findings(
+    required_value_missing_input_path: Path,
+    tmp_path: Path,
+    console_command_prefix: CommandPrefix,
+) -> None:
+    """The installed command publishes the required-value missingness evidence."""
+
+    output_path = (
+        tmp_path
+        / "required_value_missingness_report.md"
+    )
+
+    source_before = (
+        required_value_missing_input_path
+        .read_bytes()
+    )
+
+    completed = (
+        _run_process(
+            console_command_prefix,
+            (
+                required_value_missing_input_path,
+                "--output",
+                output_path,
+            ),
+            cwd=tmp_path,
+        )
+    )
+
+    _assert_success_process(
+        completed
+    )
+
+    assert (
+        "total_findings: 3"
+        in completed.stdout
+    )
+
+    assert (
+        "missingness: 3"
+        in completed.stdout
+    )
+
+    assert (
+        "MISSINGNESS_REQUIRED_VALUE: 3"
+        in completed.stdout
+    )
+
+    assert output_path.is_file()
+
+    report_text = (
+        output_path
+        .read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert (
+        "MISSINGNESS_REQUIRED_VALUE"
+        in report_text
+    )
+
+    assert (
+        "experimental_condition"
+        in report_text
+    )
+
+    assert (
+        "sample_preparation_batch"
+        in report_text
+    )
+
+    assert (
+        "protein_group_intensity_sum"
+        in report_text
+    )
+
+    assert "S002" in report_text
+    assert "S004" in report_text
+    assert "S006" in report_text
+
+    _assert_report_hides_paths(
+        report_text,
+        required_value_missing_input_path,
+        output_path,
+    )
+
+    assert (
+        required_value_missing_input_path
+        .read_bytes()
+        == source_before
+    )
+
+
 def test_seeded_console_process_publishes_expected_findings(
     seeded_input_path: Path,
     tmp_path: Path,

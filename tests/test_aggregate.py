@@ -41,6 +41,7 @@ def test_empty_summary_contains_every_dimension() -> None:
         "ingestion",
         "schema",
         "identifier",
+        "missingness",
     )
 
     assert all(

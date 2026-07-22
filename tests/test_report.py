@@ -65,6 +65,22 @@ def test_baseline_report_has_one_timestamp_and_no_source_path(
     assert report.endswith("\n")
     assert not report.endswith("\n\n")
 
+    assert (
+        "No validation findings were detected "
+        "under the configured rules."
+        in report
+    )
+
+    assert (
+        "required non-key values"
+        in report
+    )
+
+    assert (
+        "does not assign an acceptance decision"
+        in report
+    )
+
 
 def test_writer_refuses_existing_output_without_overwrite(
     tmp_path: Path,

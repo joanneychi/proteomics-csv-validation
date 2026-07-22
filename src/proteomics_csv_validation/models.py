@@ -24,6 +24,7 @@ class FindingCategory(str, Enum):
     INGESTION = "ingestion"
     SCHEMA = "schema"
     IDENTIFIER = "identifier"
+    MISSINGNESS = "missingness"
 
 
 class Severity(str, Enum):

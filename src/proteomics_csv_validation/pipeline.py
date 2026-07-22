@@ -39,6 +39,10 @@ from proteomics_csv_validation.validators.identifier import (
     IDENTIFIER_RULES,
     validate_identifiers,
 )
+from proteomics_csv_validation.validators.missingness import (
+    MISSINGNESS_RULES,
+    validate_missingness,
+)
 from proteomics_csv_validation.validators.schema import (
     SCHEMA_RULES,
     validate_schema,
@@ -208,10 +212,18 @@ def validate_input(
         )
     )
 
+    missingness_findings = (
+        validate_missingness(
+            ingested,
+            profile,
+        )
+    )
+
     configured_rules = (
         *INGESTION_RULES,
         *SCHEMA_RULES,
         *IDENTIFIER_RULES,
+        *MISSINGNESS_RULES,
     )
 
     return build_validation_result(
@@ -237,6 +249,7 @@ def validate_input(
         findings=(
             *schema_findings,
             *identifier_findings,
+            *missingness_findings,
         ),
     )
 

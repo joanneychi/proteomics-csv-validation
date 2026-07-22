@@ -1,6 +1,6 @@
 {
   "fixture_schema_version": "1.0.0",
-  "input_name": "seeded_errors.csv",
+  "input_name": "required_value_missing_values.csv",
   "descriptor_schema_version": "1.0.0",
   "profile_id": "proteomics_processed_sample_summary",
   "profile_version": "0.1.0",
@@ -33,7 +33,7 @@
     }
   ],
   "summary": {
-    "total_findings": 4,
+    "total_findings": 3,
     "category_counts": [
       {
         "category": "ingestion",
@@ -41,35 +41,27 @@
       },
       {
         "category": "schema",
-        "count": 1
+        "count": 0
       },
       {
         "category": "identifier",
-        "count": 3
+        "count": 0
       },
       {
         "category": "missingness",
-        "count": 0
+        "count": 3
       }
     ],
     "code_counts": [
       {
-        "code": "SCHEMA_MISSING_REQUIRED_COLUMN",
-        "count": 1
-      },
-      {
-        "code": "IDENTIFIER_DUPLICATE_SAMPLE_ID",
-        "count": 2
-      },
-      {
-        "code": "IDENTIFIER_MISSING_SAMPLE_ID",
-        "count": 1
+        "code": "MISSINGNESS_REQUIRED_VALUE",
+        "count": 3
       }
     ],
     "severity_counts": [
       {
         "severity": "error",
-        "count": 4
+        "count": 3
       },
       {
         "severity": "warning",
@@ -83,7 +75,7 @@
     "scope_counts": [
       {
         "scope": "file",
-        "count": 1
+        "count": 0
       },
       {
         "scope": "row",
@@ -93,86 +85,77 @@
   },
   "findings": [
     {
-      "code": "SCHEMA_MISSING_REQUIRED_COLUMN",
-      "category": "schema",
-      "severity": "error",
-      "scope": "file",
-      "rule": {
-        "rule_id": "schema.required_column",
-        "rule_version": "1.0.0"
-      },
-      "location": {
-        "row_number": null,
-        "field_name": "study_id"
-      },
-      "entity": null,
-      "observed_value": null,
-      "expected_value": "study_id"
-    },
-    {
-      "code": "IDENTIFIER_DUPLICATE_SAMPLE_ID",
-      "category": "identifier",
+      "code": "MISSINGNESS_REQUIRED_VALUE",
+      "category": "missingness",
       "severity": "error",
       "scope": "row",
       "rule": {
-        "rule_id": "identifier.sample_id_unique",
+        "rule_id": "missingness.required_value",
         "rule_version": "1.0.0"
       },
       "location": {
-        "row_number": 4,
-        "field_name": "sample_id"
+        "row_number": 3,
+        "field_name": "experimental_condition"
       },
       "entity": {
         "entity_type": "processed_sample_summary",
         "key_parts": [
           {
             "field_name": "sample_id",
-            "value": "S003"
+            "value": "S002"
           }
         ]
       },
-      "observed_value": "S003",
-      "expected_value": "unique_within_input_file"
+      "observed_value": "",
+      "expected_value": "nonmissing"
     },
     {
-      "code": "IDENTIFIER_DUPLICATE_SAMPLE_ID",
-      "category": "identifier",
+      "code": "MISSINGNESS_REQUIRED_VALUE",
+      "category": "missingness",
       "severity": "error",
       "scope": "row",
       "rule": {
-        "rule_id": "identifier.sample_id_unique",
+        "rule_id": "missingness.required_value",
         "rule_version": "1.0.0"
       },
       "location": {
         "row_number": 5,
-        "field_name": "sample_id"
+        "field_name": "sample_preparation_batch"
       },
       "entity": {
         "entity_type": "processed_sample_summary",
         "key_parts": [
           {
             "field_name": "sample_id",
-            "value": "S003"
+            "value": "S004"
           }
         ]
       },
-      "observed_value": "S003",
-      "expected_value": "unique_within_input_file"
+      "observed_value": "   ",
+      "expected_value": "nonmissing"
     },
     {
-      "code": "IDENTIFIER_MISSING_SAMPLE_ID",
-      "category": "identifier",
+      "code": "MISSINGNESS_REQUIRED_VALUE",
+      "category": "missingness",
       "severity": "error",
       "scope": "row",
       "rule": {
-        "rule_id": "identifier.sample_id_required",
+        "rule_id": "missingness.required_value",
         "rule_version": "1.0.0"
       },
       "location": {
-        "row_number": 9,
-        "field_name": "sample_id"
+        "row_number": 7,
+        "field_name": "protein_group_intensity_sum"
       },
-      "entity": null,
+      "entity": {
+        "entity_type": "processed_sample_summary",
+        "key_parts": [
+          {
+            "field_name": "sample_id",
+            "value": "S006"
+          }
+        ]
+      },
       "observed_value": "",
       "expected_value": "nonmissing"
     }
