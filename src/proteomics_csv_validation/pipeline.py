@@ -32,6 +32,7 @@ from proteomics_csv_validation.models import (
 )
 from proteomics_csv_validation.profiles.loader import (
     load_default_profile,
+    load_profile,
 )
 from proteomics_csv_validation.profiles.models import (
     ProfileDefinition,
@@ -367,6 +368,7 @@ def validate_and_write(
     overwrite: bool = False,
     auto_map: bool = False,
     column_map: Path | None = None,
+    profile_version: str | None = None,
 ) -> ValidationResult:
     """Validate one input and publish its Markdown technical report."""
 
@@ -383,7 +385,13 @@ def validate_and_write(
             output_path,
         )
 
-    profile = load_default_profile()
+    if profile_version is None:
+        profile = load_default_profile()
+    else:
+        profile = load_profile(
+            "proteomics_processed_sample_summary",
+            profile_version,
+        )
 
     if (
         auto_map

@@ -40,6 +40,12 @@ _PROFILE_REGISTRY = {
     ): (
         "proteomics_processed_sample_summary-0.2.0.json"
     ),
+    (
+        _DEFAULT_PROFILE_ID,
+        "0.3.0",
+    ): (
+        "proteomics_processed_sample_summary-0.3.0.json"
+    ),
 }
 
 

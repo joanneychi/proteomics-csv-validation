@@ -394,7 +394,7 @@ def render_markdown_report(
             "",
             "## Data and scope boundary",
             "",
-            "Version 0.3.0 checks CSV structure, sample identifiers, and required non-key values under the named profile and rule versions. Column mapping renames headers and preserves source values and physical row locations. Caller-supplied explicit mappings define source-to-profile header assignments. Scientific validity of caller-supplied header assignments requires dataset-specific review. Raw LC-MS processing, normalization, statistical analysis, biological or clinical interpretation, repository conformance, and production deployment are outside the application.",
+            f"Version {result.application_version} checks CSV structure, sample identifiers, and required non-key values under the named profile and rule versions. Column mapping renames headers and preserves source values and physical row locations. Caller-supplied explicit mappings define source-to-profile header assignments. Scientific validity of caller-supplied header assignments requires dataset-specific review. Raw LC-MS processing, normalization, statistical analysis, biological or clinical interpretation, repository conformance, and production deployment are outside the application.",
         ]
     )
 

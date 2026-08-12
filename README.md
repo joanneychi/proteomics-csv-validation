@@ -3,24 +3,24 @@
 `proteomics-csv-validation` is a local Python command-line validator for processed-sample proteomics CSV files. Each run ingests a CSV, applies column mapping when requested, checks required columns, blank or duplicate sample identifiers, and required non-key values, then writes a Markdown report. The command leaves the source CSV bytes unchanged.
 
 - **Author:** Joanne Yu Yan Chan
-- **Application version:** `0.3.0`
+- **Application version:** `0.4.0`
 - **Python:** 3.11 or newer
 - **Status:** Alpha
 
-## Eight-week capstone
+## Development timeline
 
 
 ## Validation scope
 
-Version `0.3.0` implements three validator groups:
+Application version `0.4.0` implements three validator groups:
 
 - **Schema:** required profile columns missing from the CSV header
 - **Identifier:** blank or duplicate `sample_id` values
 - **Missingness:** blank required non-key values in required columns present in the CSV
 
-Strict mode passes the source header directly to validation. `--auto-map` maps conservative lexical variants and exact profile field titles to canonical profile fields. `--column-map` applies caller-supplied source-to-profile assignments from a versioned JSON file.
+Column mapping precedes validation when `--auto-map` or `--column-map` is selected; strict mode validates source headers unchanged.
 
-Version `0.3.0` reports structural findings. The command does not perform:
+Application version `0.4.0` reports findings from these structural checks. The command does not perform:
 
 - raw LC-MS processing
 - vendor-format, mzML, or mzXML processing
@@ -37,7 +37,7 @@ Version `0.3.0` reports structural findings. The command does not perform:
 
 ## Processed-sample profile
 
-Built-in profile `proteomics_processed_sample_summary`, version `0.2.0`, defines six required fields:
+`proteomics_processed_sample_summary` is the built-in profile ID. Profile `0.2.0` is the default and requires six fields:
 
 1. `study_id`
 2. `sample_id`
@@ -46,9 +46,18 @@ Built-in profile `proteomics_processed_sample_summary`, version `0.2.0`, defines
 5. `quantified_protein_group_count`
 6. `protein_group_intensity_sum`
 
+Profile `0.3.0` requires four fields:
+
+1. `study_id`
+2. `sample_id`
+3. `quantified_protein_group_count`
+4. `protein_group_intensity_sum`
+
+Profile `0.3.0` recognizes `experimental_condition` and `sample_preparation_batch` as optional fields. Source values pass through unchanged when present, and column mapping resolves supported header variants. Schema and required-value missingness checks apply to the four required fields.
+
 `sample_id` is the exact, case-sensitive record key. Each CSV row represents a processed sample-summary record.
 
-Version `0.3.0` packages profile `0.2.0` and profile `0.1.0`, the profile used by release `v0.2.0`. Descriptor schema version `1.0.0` defines the JSON profile structure.
+Application version `0.4.0` packages profiles `0.3.0`, `0.2.0`, and `0.1.0`. Application release `v0.2.0` used profile `0.1.0`. Descriptor schema version `1.0.0` defines the JSON profile structure.
 
 ## Processing path
 
@@ -112,6 +121,27 @@ proteomics-csv-validate input.csv \
 
 `--auto-map` and `--column-map` are mutually exclusive. Explicit mapping files declare `mapping_specification_version` `1.0.0`.
 
+## Profile selection
+
+Profile `0.2.0` is the default six-field contract. Use profile `0.3.0` for a processed-sample CSV when experimental-condition or preparation-batch metadata are unavailable and the structural review does not require those fields:
+
+```bash
+proteomics-csv-validate input.csv \
+  --profile-version 0.3.0 \
+  --auto-map \
+  --output report.md
+```
+
+Profile selection sets the required-field contract. Unavailable metadata receives no inferred value, and source values are unchanged. The validator does not perform scientific interpretation or repository-conformance assessment.
+
+## PXD060583 interoperability evaluation
+
+The PXD060583 interoperability study used 42 processed experiment records derived from the publicly deposited ProteomeXchange dataset `PXD060583`. The derived CSV retained the study accession, MaxQuant experiment labels, quantified protein-group counts, and summed LFQ intensities. The source audit did not establish unambiguous values for `experimental_condition` or `sample_preparation_batch`, so the derived CSV omitted those fields.
+
+With profile `0.3.0`, strict, automatic, and explicit mapping each processed all 42 records with zero structural findings. A negative-control copy with one required quantitative value removed produced one `MISSINGNESS_REQUIRED_VALUE` finding.
+
+The study evaluated structural interoperability of the derived CSV records. The CLI accepts processed-sample CSV input; PRIDE archives, MaxQuant `proteinGroups.txt` files, spreadsheets, and raw LC-MS files are not direct inputs. Repository conformance and scientific validity were not evaluated.
+
 ## Installation
 
 Run from the repository root.
@@ -142,10 +172,10 @@ Runtime code uses the Python standard library. Installing `.[dev]` adds pytest.
 proteomics-csv-validate --version
 ```
 
-Expected output for version `0.3.0`:
+Expected output for application version `0.4.0`:
 
 ```text
-proteomics-csv-validate 0.3.0
+proteomics-csv-validate 0.4.0
 ```
 
 ## Controlled examples
@@ -187,7 +217,7 @@ Report format `1.1.0` records:
 - mapping mode and resolved header mappings
 - configured rule identities
 - row and finding counts
-- source location
+- input filename
 - observed and expected values
 - technical message
 - rule identity beside each finding
@@ -218,7 +248,7 @@ Run the complete suite:
 python -m pytest
 ```
 
-Tests cover validator logic, aggregation, ingestion, profile loading, column mapping, CLI behavior, pipeline integration, report rendering, packaging, and end-to-end execution.
+The test suite exercises validator logic, aggregation, ingestion, profile loading, profile selection, column mapping, CLI behavior, pipeline integration, report rendering, packaging, and end-to-end execution.
 
 ## Repository structure
 
@@ -253,7 +283,7 @@ python -m build
 
 ## Data and privacy
 
-Bundled fixtures contain synthetic records. Institutional or other non-synthetic datasets require authorization, documented provenance, and storage and access procedures appropriate to the data classification. `proteomics-csv-validate` reads a caller-selected local input file and writes the report to a caller-selected local path.
+The PXD060583 evaluation records source provenance. Institutional, proprietary, or restricted datasets require authorization and storage and access controls appropriate to their classification. `proteomics-csv-validate` reads a caller-selected local CSV and writes the report to a caller-selected local path.
 
 ## License
 

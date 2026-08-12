@@ -30,8 +30,8 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="proteomics-csv-validate",
         description=(
-            "Validate a synthetic proteomics "
-            "processed-sample CSV and publish "
+            "Validate a processed-sample proteomics "
+            "CSV and publish "
             "a Markdown technical review report."
         ),
         allow_abbrev=False,
@@ -69,6 +69,18 @@ def _parser() -> argparse.ArgumentParser:
         metavar="FILE",
         help=(
             "Apply an explicit versioned JSON column mapping."
+        ),
+    )
+
+    parser.add_argument(
+        "--profile-version",
+        metavar="VERSION",
+        help=(
+            "Select a registered profile version. "
+            "Default 0.2.0 requires all six profile fields; "
+            "0.3.0 requires four fields, with "
+            "experimental-condition and preparation-batch "
+            "metadata optional."
         ),
     )
 
@@ -113,6 +125,11 @@ def _print_summary(
 
     print(
         f"rows: {result.rows}"
+    )
+
+    print(
+        "profile_version: "
+        f"{result.profile_version}"
     )
 
     print(
@@ -208,6 +225,14 @@ def main(
             validation_options[
                 "column_map"
             ] = arguments.column_map
+
+        if (
+            arguments.profile_version
+            is not None
+        ):
+            validation_options[
+                "profile_version"
+            ] = arguments.profile_version
 
         result = validate_and_write(
             arguments.input,
