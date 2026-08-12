@@ -54,6 +54,10 @@ def test_baseline_report_has_one_timestamp_and_no_source_path(
     ) == 1
 
     assert "baseline_valid.csv" in report
+    assert "Report format version: `1.1.0`" in report
+    assert "## Column mapping" in report
+    assert "Mapping mode: `strict`" in report
+    assert "Resolved columns: `0`" in report
 
     assert (
         str(
@@ -77,7 +81,7 @@ def test_baseline_report_has_one_timestamp_and_no_source_path(
     )
 
     assert (
-        "does not assign an acceptance decision"
+        "Reviewers decide dataset acceptance."
         in report
     )
 
@@ -106,3 +110,26 @@ def test_writer_refuses_existing_output_without_overwrite(
     assert output.read_text(
         encoding="utf-8"
     ) == "reviewed\n"
+
+
+def test_finding_section_displays_rule_identity(
+    required_value_missing_input_path: Path,
+    default_profile: ProfileDefinition,
+) -> None:
+    """Report format 1.1.0 attaches rule identity to each finding."""
+
+    result = validate_input(
+        required_value_missing_input_path,
+        default_profile,
+    )
+
+    report = render_markdown_report(
+        result,
+        generated_at=_FIXED_TIME,
+    )
+
+    assert (
+        "- Rule: `missingness.required_value` "
+        "version `1.0.0`"
+        in report
+    )

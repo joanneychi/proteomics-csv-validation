@@ -1,0 +1,131 @@
+{
+  "descriptor_schema_version": "1.0.0",
+  "profile_id": "proteomics_processed_sample_summary",
+  "profile_version": "0.2.0",
+  "entity_type": "processed_sample_summary",
+  "title": "Proteomics Processed Sample Summary",
+  "description": "One-study processed-sample records for local technical data-quality review.",
+  "record_grain": "one processed sample-summary record per row",
+  "file_grain": "one study per file",
+  "fields": [
+    {
+      "name": "study_id",
+      "title": "Study identifier",
+      "description": "Identifier for the study represented by the file.",
+      "logical_type": "string",
+      "required": true,
+      "missing_value_policy": {
+        "blank_is_missing": true,
+        "whitespace_only_is_missing": true,
+        "missing_tokens": [],
+        "tokens_case_sensitive": true
+      }
+    },
+    {
+      "name": "sample_id",
+      "title": "Sample identifier",
+      "description": "Exact case-sensitive identifier for one processed sample-summary record.",
+      "logical_type": "string",
+      "required": true,
+      "missing_value_policy": {
+        "blank_is_missing": true,
+        "whitespace_only_is_missing": true,
+        "missing_tokens": [],
+        "tokens_case_sensitive": true
+      }
+    },
+    {
+      "name": "experimental_condition",
+      "title": "Experimental condition",
+      "description": "Primary comparison group or experimental condition.",
+      "logical_type": "string",
+      "required": true,
+      "missing_value_policy": {
+        "blank_is_missing": true,
+        "whitespace_only_is_missing": true,
+        "missing_tokens": [],
+        "tokens_case_sensitive": true
+      }
+    },
+    {
+      "name": "sample_preparation_batch",
+      "title": "Sample preparation batch",
+      "description": "Typed preparation or processing batch identifier.",
+      "logical_type": "string",
+      "required": true,
+      "missing_value_policy": {
+        "blank_is_missing": true,
+        "whitespace_only_is_missing": true,
+        "missing_tokens": [],
+        "tokens_case_sensitive": true
+      }
+    },
+    {
+      "name": "quantified_protein_group_count",
+      "title": "Quantified protein-group count",
+      "description": "Number of protein groups with an upstream quantitative abundance for the sample.",
+      "logical_type": "integer",
+      "required": true,
+      "missing_value_policy": {
+        "blank_is_missing": true,
+        "whitespace_only_is_missing": true,
+        "missing_tokens": [],
+        "tokens_case_sensitive": true
+      }
+    },
+    {
+      "name": "protein_group_intensity_sum",
+      "title": "Protein-group intensity sum",
+      "description": "Sum of supplied non-missing protein-group abundance values for the sample.",
+      "logical_type": "decimal",
+      "required": true,
+      "missing_value_policy": {
+        "blank_is_missing": true,
+        "whitespace_only_is_missing": true,
+        "missing_tokens": [],
+        "tokens_case_sensitive": true
+      }
+    }
+  ],
+  "key_fields": [
+    "sample_id"
+  ],
+  "factor_fields": [
+    "experimental_condition"
+  ],
+  "batch_fields": [
+    "sample_preparation_batch"
+  ],
+  "metrics": [
+    {
+      "field_name": "quantified_protein_group_count",
+      "metric_id": "sample.quantified_protein_group_count",
+      "unit": "count",
+      "scale": "not_applicable",
+      "minimum": 0,
+      "value_origin": "upstream_processed_result",
+      "normalization_state": "not_applicable",
+      "aggregation": null
+    },
+    {
+      "field_name": "protein_group_intensity_sum",
+      "metric_id": "sample.protein_group_intensity_sum",
+      "unit": "arbitrary_intensity_unit",
+      "scale": "linear",
+      "minimum": "0",
+      "value_origin": "upstream_processed_result",
+      "normalization_state": "not_asserted",
+      "aggregation": "sum"
+    }
+  ],
+  "csv_dialect": {
+    "encoding": "utf-8",
+    "delimiter": ",",
+    "quote_character": "\"",
+    "header_required": true,
+    "allow_utf8_bom": true,
+    "allow_blank_records": false,
+    "allow_embedded_newlines": false,
+    "decimal_separator": "."
+  }
+}

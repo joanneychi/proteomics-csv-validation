@@ -12,6 +12,7 @@ from proteomics_csv_validation import (
     __version__,
 )
 from proteomics_csv_validation.errors import (
+    ColumnMappingError,
     InputAccessError,
     OutputWriteError,
     ProfileError,
@@ -47,6 +48,28 @@ def _parser() -> argparse.ArgumentParser:
         type=Path,
         required=True,
         help="Path for the Markdown technical review report.",
+    )
+
+    mapping_group = (
+        parser.add_mutually_exclusive_group()
+    )
+
+    mapping_group.add_argument(
+        "--auto-map",
+        action="store_true",
+        help=(
+            "Resolve conservative lexical variants and "
+            "profile field titles to canonical column names."
+        ),
+    )
+
+    mapping_group.add_argument(
+        "--column-map",
+        type=Path,
+        metavar="FILE",
+        help=(
+            "Apply an explicit versioned JSON column mapping."
+        ),
     )
 
     parser.add_argument(
@@ -90,6 +113,21 @@ def _print_summary(
 
     print(
         f"rows: {result.rows}"
+    )
+
+    print(
+        "mapping_mode: "
+        f"{result.column_mapping.mode.value}"
+    )
+
+    print(
+        "mapping_resolution: "
+        f"{'completed' if result.column_mapping.resolution_completed else 'not_reached'}"
+    )
+
+    print(
+        "mapped_columns: "
+        f"{len(result.column_mapping.entries)}"
     )
 
     print(
@@ -149,12 +187,32 @@ def main(
     )
 
     try:
+        validation_options: dict[
+            str,
+            object,
+        ] = {
+            "overwrite": (
+                arguments.overwrite
+            ),
+        }
+
+        if arguments.auto_map:
+            validation_options[
+                "auto_map"
+            ] = True
+
+        if (
+            arguments.column_map
+            is not None
+        ):
+            validation_options[
+                "column_map"
+            ] = arguments.column_map
+
         result = validate_and_write(
             arguments.input,
             arguments.output,
-            overwrite=(
-                arguments.overwrite
-            ),
+            **validation_options,
         )
     except InputAccessError as exc:
         print(
@@ -170,6 +228,13 @@ def main(
         )
 
         return 4
+    except ColumnMappingError as exc:
+        print(
+            f"mapping error: {exc}",
+            file=sys.stderr,
+        )
+
+        return 6
     except OutputWriteError as exc:
         print(
             f"output error: {exc}",

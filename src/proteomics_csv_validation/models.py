@@ -51,6 +51,14 @@ class ValidationStatus(str, Enum):
     )
 
 
+class ColumnMappingMode(str, Enum):
+    """Requested source-column resolution mode."""
+
+    STRICT = "strict"
+    AUTOMATIC = "automatic"
+    EXPLICIT = "explicit"
+
+
 @dataclass(frozen=True, slots=True)
 class SourceLocation:
     """Optional physical CSV location for one finding."""
@@ -125,6 +133,74 @@ class RuleReference:
         if self.rule_version == "":
             raise ValueError(
                 "rule_version cannot be empty."
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class ColumnMappingEntry:
+    """One resolved source-header name and canonical profile field."""
+
+    source_field: str
+    target_field: str
+
+    def __post_init__(self) -> None:
+        if self.source_field == "":
+            raise ValueError(
+                "Column mapping source_field cannot be empty."
+            )
+
+        if self.target_field == "":
+            raise ValueError(
+                "Column mapping target_field cannot be empty."
+            )
+
+        if self.source_field == self.target_field:
+            raise ValueError(
+                "Column mapping entries must rename a source field."
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class ColumnMappingEvidence:
+    """Immutable provenance for one column-resolution stage."""
+
+    specification_version: str
+    mode: ColumnMappingMode
+    resolution_completed: bool
+    entries: tuple[ColumnMappingEntry, ...]
+
+    def __post_init__(self) -> None:
+        if self.specification_version == "":
+            raise ValueError(
+                "Column mapping specification_version cannot be empty."
+            )
+
+        if (
+            not self.resolution_completed
+            and self.entries
+        ):
+            raise ValueError(
+                "Incomplete column mapping cannot contain resolved entries."
+            )
+
+        sources = tuple(
+            entry.source_field
+            for entry in self.entries
+        )
+
+        targets = tuple(
+            entry.target_field
+            for entry in self.entries
+        )
+
+        if len(set(sources)) != len(sources):
+            raise ValueError(
+                "Column mapping source fields must be unique."
+            )
+
+        if len(set(targets)) != len(targets):
+            raise ValueError(
+                "Column mapping target fields must be unique."
             )
 
 
@@ -275,6 +351,7 @@ class ValidationResult:
     configured_rules: tuple[RuleReference, ...]
     findings: tuple[Finding, ...]
     summary: FindingSummary
+    column_mapping: ColumnMappingEvidence
 
     def __post_init__(self) -> None:
         if self.rows < 0:

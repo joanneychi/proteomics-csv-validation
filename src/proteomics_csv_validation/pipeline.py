@@ -11,7 +11,12 @@ from proteomics_csv_validation import (
 from proteomics_csv_validation.aggregate import (
     build_validation_result,
 )
+from proteomics_csv_validation.column_mapping import (
+    pending_column_mapping_evidence,
+    resolve_column_mapping,
+)
 from proteomics_csv_validation.errors import (
+    ColumnMappingError,
     InputAccessError,
     OutputWriteError,
 )
@@ -132,9 +137,88 @@ def _ensure_distinct_input_and_output(
             )
 
 
+
+def _ensure_distinct_mapping_and_output(
+    mapping_path: Path,
+    output_path: Path,
+) -> None:
+    """Reject lexical and filesystem aliases of the protected mapping file."""
+
+    if not isinstance(
+        mapping_path,
+        Path,
+    ):
+        raise TypeError(
+            "mapping_path must be a pathlib.Path."
+        )
+
+    if not isinstance(
+        output_path,
+        Path,
+    ):
+        raise TypeError(
+            "output_path must be a pathlib.Path."
+        )
+
+    try:
+        resolved_mapping = mapping_path.resolve(
+            strict=False
+        )
+    except (
+        OSError,
+        RuntimeError,
+    ) as exc:
+        raise ColumnMappingError(
+            "The column-mapping path could not be resolved safely."
+        ) from exc
+
+    try:
+        resolved_output = output_path.resolve(
+            strict=False
+        )
+    except (
+        OSError,
+        RuntimeError,
+    ) as exc:
+        raise OutputWriteError(
+            "The output path could not be resolved safely."
+        ) from exc
+
+    if resolved_mapping == resolved_output:
+        raise OutputWriteError(
+            "The report target cannot replace the column-mapping file."
+        )
+
+    if (
+        mapping_path.exists()
+        and output_path.exists()
+    ):
+        try:
+            same_file = mapping_path.samefile(
+                output_path
+            )
+        except (
+            OSError,
+            RuntimeError,
+        ) as exc:
+            raise OutputWriteError(
+                "Filesystem identity could not be "
+                "verified for the selected output."
+            ) from exc
+
+        if same_file:
+            raise OutputWriteError(
+                "The report target cannot reference "
+                "the same file as the column-mapping file."
+            )
+
+
 def validate_input(
     input_path: Path,
     profile: ProfileDefinition,
+    *,
+    auto_map: bool = False,
+    column_map: Path | None = None,
 ) -> ValidationResult:
     """Validate one accessible input using one resolved profile."""
 
@@ -153,6 +237,13 @@ def validate_input(
         raise TypeError(
             "profile must be a ProfileDefinition."
         )
+
+    column_mapping = (
+        pending_column_mapping_evidence(
+            auto_map=auto_map,
+            column_map=column_map,
+        )
+    )
 
     ingested = ingest_csv(
         input_path,
@@ -189,6 +280,9 @@ def validate_input(
             findings=(
                 ingested.finding,
             ),
+            column_mapping=(
+                column_mapping
+            ),
         )
 
     if not isinstance(
@@ -200,21 +294,30 @@ def validate_input(
             "unsupported result type."
         )
 
+    resolved, column_mapping = (
+        resolve_column_mapping(
+            ingested,
+            profile,
+            auto_map=auto_map,
+            column_map=column_map,
+        )
+    )
+
     schema_findings = validate_schema(
-        ingested,
+        resolved,
         profile,
     )
 
     identifier_findings = (
         validate_identifiers(
-            ingested,
+            resolved,
             profile,
         )
     )
 
     missingness_findings = (
         validate_missingness(
-            ingested,
+            resolved,
             profile,
         )
     )
@@ -238,10 +341,10 @@ def validate_input(
         profile_version=(
             profile.profile_version
         ),
-        input_name=ingested.input_name,
+        input_name=resolved.input_name,
         status=ValidationStatus.COMPLETED,
         rows=len(
-            ingested.records
+            resolved.records
         ),
         configured_rules=(
             configured_rules
@@ -251,6 +354,9 @@ def validate_input(
             *identifier_findings,
             *missingness_findings,
         ),
+        column_mapping=(
+            column_mapping
+        ),
     )
 
 
@@ -259,6 +365,8 @@ def validate_and_write(
     output_path: Path,
     *,
     overwrite: bool = False,
+    auto_map: bool = False,
+    column_map: Path | None = None,
 ) -> ValidationResult:
     """Validate one input and publish its Markdown technical report."""
 
@@ -269,12 +377,29 @@ def validate_and_write(
         output_path,
     )
 
+    if column_map is not None:
+        _ensure_distinct_mapping_and_output(
+            column_map,
+            output_path,
+        )
+
     profile = load_default_profile()
 
-    result = validate_input(
-        input_path,
-        profile,
-    )
+    if (
+        auto_map
+        or column_map is not None
+    ):
+        result = validate_input(
+            input_path,
+            profile,
+            auto_map=auto_map,
+            column_map=column_map,
+        )
+    else:
+        result = validate_input(
+            input_path,
+            profile,
+        )
 
     report_text = render_markdown_report(
         result,

@@ -25,14 +25,20 @@ _DESCRIPTOR_SCHEMA_VERSION = "1.0.0"
 _DEFAULT_PROFILE_ID = (
     "proteomics_processed_sample_summary"
 )
-_DEFAULT_PROFILE_VERSION = "0.1.0"
+_DEFAULT_PROFILE_VERSION = "0.2.0"
 
 _PROFILE_REGISTRY = {
     (
         _DEFAULT_PROFILE_ID,
-        _DEFAULT_PROFILE_VERSION,
+        "0.1.0",
     ): (
         "proteomics_processed_sample_summary-0.1.0.json"
+    ),
+    (
+        _DEFAULT_PROFILE_ID,
+        _DEFAULT_PROFILE_VERSION,
+    ): (
+        "proteomics_processed_sample_summary-0.2.0.json"
     ),
 }
 
@@ -715,7 +721,7 @@ def load_profile(
 
 
 def load_default_profile() -> ProfileDefinition:
-    """Load the single built-in profile for version 0.1.0."""
+    """Load the current built-in profile for version 0.2.0."""
 
     return load_profile(
         _DEFAULT_PROFILE_ID,

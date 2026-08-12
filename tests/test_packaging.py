@@ -31,11 +31,24 @@ def test_profile_resource_is_installed() -> None:
             "data"
         )
         .joinpath(
+            "proteomics_processed_sample_summary-0.2.0.json"
+        )
+    )
+
+    legacy_resource = (
+        resources.files(
+            "proteomics_csv_validation.profiles"
+        )
+        .joinpath(
+            "data"
+        )
+        .joinpath(
             "proteomics_processed_sample_summary-0.1.0.json"
         )
     )
 
     assert resource.is_file()
+    assert legacy_resource.is_file()
 
 
 def test_pyproject_declares_console_entry_point(

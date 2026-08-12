@@ -12,6 +12,7 @@ import pytest
 
 from proteomics_csv_validation.profiles.loader import (
     load_default_profile,
+    load_profile,
 )
 from proteomics_csv_validation.profiles.models import (
     ProfileDefinition,
@@ -156,6 +157,18 @@ def default_profile() -> ProfileDefinition:
     """Return the installed built-in profile."""
 
     return load_default_profile()
+
+
+@pytest.fixture(
+    scope="session"
+)
+def legacy_profile() -> ProfileDefinition:
+    """Return the preserved synthetic profile used by reviewed v0.2.0 oracles."""
+
+    return load_profile(
+        "proteomics_processed_sample_summary",
+        "0.1.0",
+    )
 
 
 @pytest.fixture(

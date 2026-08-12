@@ -1,80 +1,43 @@
 # Proteomics CSV Validation System
 
+`proteomics-csv-validation` is a local Python command-line validator for processed-sample proteomics CSV files. Each run ingests a CSV, applies column mapping when requested, checks required columns, blank or duplicate sample identifiers, and required non-key values, then writes a Markdown report. The command leaves the source CSV bytes unchanged.
+
 - **Author:** Joanne Yu Yan Chan
-- **Application version:** 0.2.0
-- **Release focus:** Required-value missingness validation
+- **Application version:** `0.3.0`
+- **Python:** 3.11 or newer
+- **Status:** Alpha
 
-## Purpose
+## Eight-week capstone
 
-The Proteomics CSV Validation System is a local Python prototype for technical review of synthetic processed-sample CSV files before downstream analysis. Technical reviewers, data analysts, laboratory personnel, and project personnel use the command to inspect configured data-quality findings.
 
-The application performs:
+## Validation scope
 
-- CSV ingestion and parse checks
-- required-column schema validation
-- missing `sample_id` validation
-- duplicate `sample_id` validation
-- profile-driven missing required non-key value validation
-- deterministic finding aggregation
-- Markdown technical-review report generation
-- command-line execution
-- Python package installation
-- automated verification with controlled fixtures
+Version `0.3.0` implements three validator groups:
 
-Processing order:
+- **Schema:** required profile columns missing from the CSV header
+- **Identifier:** blank or duplicate `sample_id` values
+- **Missingness:** blank required non-key values in required columns present in the CSV
 
-```text
-synthetic CSV input
-→ ingestion
-→ schema validation
-→ identifier validation
-→ required-value missingness validation
-→ finding aggregation
-→ Markdown report
-```
+Strict mode passes the source header directly to validation. `--auto-map` maps conservative lexical variants and exact profile field titles to canonical profile fields. `--column-map` applies caller-supplied source-to-profile assignments from a versioned JSON file.
 
-## Application boundary
+Version `0.3.0` reports structural findings. The command does not perform:
 
-Version 0.2.0 evaluates CSV structure, sample identifiers, and required non-key values under named profile and rule versions.
-
-The application excludes:
-
-- raw LC-MS data processing
-- vendor-format parsing
-- mzML and mzXML parsing
+- raw LC-MS processing
+- vendor-format, mzML, or mzXML processing
 - protein inference
-- imputation
-- normalization
+- imputation or normalization
 - batch correction
 - statistical analysis
-- biological interpretation
-- clinical interpretation
+- biological or clinical interpretation
 - regulatory decisions
-- repository-format conformance claims
-- SDRF-Proteomics conformance claims
-- institutional records
-- patient, participant, and clinical data
-- proprietary laboratory data
-- passwords, access tokens, and credentials
-- database services
+- repository-conformance assessment
+- database or hosted-service operation
 - cloud upload
 - production deployment
-- continuous deployment
 
-A completed run writes a report and returns exit status `0`, including runs with findings. Dataset acceptance occurs through reviewer judgment outside the command.
+## Processed-sample profile
 
-## Validation profile
-
-Built-in profile:
-
-- profile ID: `proteomics_processed_sample_summary`
-- profile version: `0.1.0`
-- descriptor schema version: `1.0.0`
-- file grain: one study per file
-- record grain: one processed sample-summary record per row
-- record key: exact, case-sensitive `sample_id`
-
-Required columns:
+Built-in profile `proteomics_processed_sample_summary`, version `0.2.0`, defines six required fields:
 
 1. `study_id`
 2. `sample_id`
@@ -83,62 +46,75 @@ Required columns:
 5. `quantified_protein_group_count`
 6. `protein_group_intensity_sum`
 
-## Rule ownership
+`sample_id` is the exact, case-sensitive record key. Each CSV row represents a processed sample-summary record.
 
-Schema validation reports required columns absent from the CSV header.
+Version `0.3.0` packages profile `0.2.0` and profile `0.1.0`, the profile used by release `v0.2.0`. Descriptor schema version `1.0.0` defines the JSON profile structure.
 
-Identifier validation reports missing or duplicate `sample_id` values.
-
-Missingness validation reports missing values in required non-key fields present in the CSV header. Field-specific missing-value policies govern blank values and values containing whitespace with no other characters.
-
-Current rule:
+## Processing path
 
 ```text
-rule_id: missingness.required_value
-rule_version: 1.0.0
-finding_code: MISSINGNESS_REQUIRED_VALUE
-category: missingness
-severity: error
-scope: row
-expected_value: nonmissing
+CSV input
+→ ingestion
+→ optional column mapping
+→ schema validation
+→ identifier validation
+→ required-value missingness validation
+→ finding aggregation
+→ Markdown report
 ```
 
-The ownership boundaries prevent duplicate findings for one defect.
+Automatic and explicit mapping rename source headers to canonical profile field names. Mapping code preserves source values and physical CSV row numbers.
 
-## Repository structure
+Schema validation reports missing required columns. Identifier validation reports blank or duplicate `sample_id` values. Missingness validation reports blank required non-key values in present columns.
 
-```text
-data/
-  expected/       reviewed expected-result oracles
-  synthetic/      synthetic CSV fixtures
-src/
-  proteomics_csv_validation/
-    profiles/     versioned profile resources and loader
-    validators/   schema, identifier, and missingness validators
-    aggregate.py  deterministic finding order and summary counts
-    cli.py        command-line interface
-    ingest.py     CSV ingestion and input checks
-    pipeline.py   validation workflow
-    report.py     Markdown report rendering and publication
-tests/            unit, CLI, pipeline, packaging, report, and end-to-end tests
-MANIFEST.in       source-distribution test and fixture inclusion
-README.md         setup, use, scope, and verification record
-pyproject.toml    build, package, command, and test configuration
+## Column mapping
+
+### Strict mode
+
+Strict mode passes source headers to validation unchanged:
+
+```bash
+proteomics-csv-validate input.csv \
+  --output report.md
 ```
 
-`.gitignore` excludes virtual environments, caches, generated package metadata, build artifacts, and generated reports.
+### Automatic mapping
 
-## Environment
+`--auto-map` maps conservative lexical variants and exact profile field titles to canonical profile fields:
 
-- Python requirement: 3.11 or newer
-- verified local runtime: macOS with Python 3.14.5
-- third-party runtime dependencies: none
-- development dependency: `pytest>=8.0,<9`
-- package status: alpha academic prototype
+```bash
+proteomics-csv-validate input.csv \
+  --auto-map \
+  --output report.md
+```
+
+Dataset-specific names and ambiguous header meanings require an explicit mapping file.
+
+### Explicit mapping
+
+Explicit mapping uses a versioned JSON file with canonical profile fields as keys and source headers as values:
+
+```json
+{
+  "mapping_specification_version": "1.0.0",
+  "columns": {
+    "sample_id": "Sample Name",
+    "experimental_condition": "Condition"
+  }
+}
+```
+
+```bash
+proteomics-csv-validate input.csv \
+  --column-map mapping.json \
+  --output report.md
+```
+
+`--auto-map` and `--column-map` are mutually exclusive. Explicit mapping files declare `mapping_specification_version` `1.0.0`.
 
 ## Installation
 
-Run the commands from the repository root.
+Run from the repository root.
 
 ### macOS or Linux
 
@@ -158,39 +134,35 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 ```
 
-The `dev` extra installs pytest for local verification.
+Runtime code uses the Python standard library. Installing `.[dev]` adds pytest.
 
-## Version verification
+## Version check
 
 ```bash
 proteomics-csv-validate --version
 ```
 
-Expected output:
+Expected output for version `0.3.0`:
 
 ```text
-proteomics-csv-validate 0.2.0
+proteomics-csv-validate 0.3.0
 ```
 
-## Automated tests
+## Controlled examples
 
-Run the full suite:
+| Fixture | Rows | Expected findings |
+|---|---:|---:|
+| `baseline_valid.csv` | 8 | 0 |
+| `seeded_errors.csv` | 8 | 4 |
+| `required_value_missing_values.csv` | 8 | 3 |
 
-```bash
-python -m pytest
-```
+`seeded_errors.csv` omits required `study_id` from the header, repeats `sample_id` value `S003` at CSV rows 4 and 5, and contains a blank `sample_id` at row 9.
 
-Verified result on Python 3.14.5 with pytest 8.4.2:
+`required_value_missing_values.csv` contains a blank `experimental_condition` at CSV row 3, a whitespace-only `sample_preparation_batch` at row 5, and a blank `protein_group_intensity_sum` at row 7.
 
-```text
-75 passed
-```
+Bundled fixture records are synthetic.
 
-The suite contains unit, integration, CLI, pipeline, report, packaging, and end-to-end tests.
-
-## Command-line use
-
-### Baseline fixture
+### Run a fixture
 
 ```bash
 proteomics-csv-validate \
@@ -198,101 +170,35 @@ proteomics-csv-validate \
   --output reports/baseline_report.md
 ```
 
-Expected summary:
-
-```text
-status: completed
-rows: 8
-total_findings: 0
-category_counts:
-  ingestion: 0
-  schema: 0
-  identifier: 0
-  missingness: 0
-finding_code_counts:
-  none
-```
-
-### Seeded schema and identifier fixture
+When the target report already exists, add `--overwrite`:
 
 ```bash
 proteomics-csv-validate \
-  data/synthetic/seeded_errors.csv \
-  --output reports/seeded_report.md
-```
-
-Expected summary:
-
-```text
-status: completed
-rows: 8
-total_findings: 4
-category_counts:
-  ingestion: 0
-  schema: 1
-  identifier: 3
-  missingness: 0
-finding_code_counts:
-  SCHEMA_MISSING_REQUIRED_COLUMN: 1
-  IDENTIFIER_DUPLICATE_SAMPLE_ID: 2
-  IDENTIFIER_MISSING_SAMPLE_ID: 1
-```
-
-Seeded findings:
-
-- missing required column `study_id`
-- duplicate `sample_id` value `S003` at CSV rows 4 and 5
-- missing `sample_id` at CSV row 9
-
-### Required-value missingness fixture
-
-```bash
-proteomics-csv-validate \
-  data/synthetic/required_value_missing_values.csv \
-  --output reports/required_value_missing_values_report.md
-```
-
-Expected summary:
-
-```text
-status: completed
-rows: 8
-total_findings: 3
-category_counts:
-  ingestion: 0
-  schema: 0
-  identifier: 0
-  missingness: 3
-finding_code_counts:
-  MISSINGNESS_REQUIRED_VALUE: 3
-```
-
-Seeded findings:
-
-- blank `experimental_condition` at CSV row 3
-- three-space `sample_preparation_batch` value at CSV row 5
-- blank `protein_group_intensity_sum` at CSV row 7
-
-The fixtures contain synthetic records. Fixture files retain their original bytes after each validation run.
-
-## Report publication
-
-The command creates a missing output parent directory. An existing report path blocks publication unless `--overwrite` is supplied.
-
-```bash
-proteomics-csv-validate \
-  data/synthetic/required_value_missing_values.csv \
-  --output reports/required_value_missing_values_report.md \
+  data/synthetic/baseline_valid.csv \
+  --output reports/baseline_report.md \
   --overwrite
 ```
 
-The report records application, profile, and rule versions; input name; row count; summary counts; structured findings; technical interpretation; and scope boundaries. Reports omit absolute input and output paths.
+## Reports
 
-## Module execution
+Report format `1.1.0` records:
 
-```bash
-python -m proteomics_csv_validation INPUT --output OUTPUT
-```
+- application and profile identities
+- mapping mode and resolved header mappings
+- configured rule identities
+- row and finding counts
+- source location
+- observed and expected values
+- technical message
+- rule identity beside each finding
+- technical interpretation
+- implemented checks and excluded functions
+
+The command creates a missing parent directory for the selected output path before publishing the report. Existing report files require `--overwrite`.
+
+Reports record filenames. Absolute input, output, and mapping-file paths are omitted.
+
+Completed validation returns exit status `0`, including runs containing findings.
 
 ## Exit codes
 
@@ -302,63 +208,53 @@ python -m proteomics_csv_validation INPUT --output OUTPUT
 - `3`: input access failure or validation stopped after a fatal ingestion finding
 - `4`: profile-definition failure
 - `5`: report-publication failure
+- `6`: column-mapping configuration or resolution failure
 
-Findings from completed runs retain exit status `0`.
+## Tests
 
-## Distribution build
+Run the complete suite:
 
-Install the build frontend:
+```bash
+python -m pytest
+```
+
+Tests cover validator logic, aggregation, ingestion, profile loading, column mapping, CLI behavior, pipeline integration, report rendering, packaging, and end-to-end execution.
+
+## Repository structure
+
+```text
+data/
+  expected/       expected-result JSON records
+  synthetic/      controlled synthetic CSV fixtures
+src/
+  proteomics_csv_validation/
+    profiles/     versioned profile resources and loader
+    validators/   schema, identifier, and missingness validators
+    aggregate.py  finding ordering and summary counts
+    cli.py        command-line interface
+    column_mapping.py  header mapping
+    ingest.py     CSV ingestion and file checks
+    pipeline.py   validation workflow
+    report.py     Markdown rendering and publication
+tests/            automated test suite
+MANIFEST.in       source-distribution inclusion rules
+README.md         project documentation
+pyproject.toml    package and test configuration
+```
+
+## Package build
 
 ```bash
 python -m pip install --upgrade build
-```
-
-Build the source distribution and wheel:
-
-```bash
 python -m build
 ```
 
-The build writes archives to `dist/`.
+`python -m build` writes the source distribution and wheel to `dist/`.
 
-Release audit checklist for version 0.2.0:
+## Data and privacy
 
-- source-distribution creation
-- source-distribution test and fixture inclusion
-- `py3-none-any` wheel creation
-- package metadata version `0.2.0`
-- built-in profile inclusion
-- isolated wheel installation
-- installed command execution
-- full test execution from the source tree
-- baseline fixture execution outside the repository
-- seeded-error fixture execution outside the repository
-- Required-value fixture execution outside the repository
-- report path sanitization
-- archive hashes
+Bundled fixtures contain synthetic records. Institutional or other non-synthetic datasets require authorization, documented provenance, and storage and access procedures appropriate to the data classification. `proteomics-csv-validate` reads a caller-selected local input file and writes the report to a caller-selected local path.
 
-## Repository workflow
+## License
 
-- repository visibility: private
-- reviewed branch: `main`
-- integrated development branch: `development`
-- verified baseline tag: `v0.1.0`
-- development target: `v0.2.0`
-- hosted CI status: proposed
-- continuous deployment status: excluded
-
-The `v0.1.0` release records the verified initial validation baseline.
-
-## Deferred modules
-
-- batch and group distribution review
-- quantitative datatype and range validation
-- documented threshold validation
-- outlier review
-- PHI or PII-style field-name detection
-
-Each deferred module requires a written scientific contract, direct tests, interaction tests, controlled fixtures, expected-result evidence, and documentation before integration.
-
-## Automation status
-
-GitHub is the repository platform. GitHub Actions has no active workflow in version 0.2.0. Local pytest execution is the automated test evidence. Continuous deployment and production deployment are outside the project scope.
+License identifier: `LicenseRef-Proprietary`.

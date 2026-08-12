@@ -299,7 +299,7 @@ def test_baseline_validation_is_completed_without_findings(
 
     assert (
         result.profile_version
-        == "0.1.0"
+        == "0.2.0"
     )
 
     assert result.rows == 8
@@ -761,7 +761,7 @@ def test_validate_and_write_publishes_baseline_report(
         report_text
     )
 
-    assert "synthetic" in (
+    assert "## data and scope boundary" in (
         report_text.lower()
     )
 
@@ -1193,8 +1193,11 @@ def test_identical_input_and_output_path_is_rejected(
 
 def test_relative_alias_of_input_is_rejected(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An absolute input and relative output alias cannot bypass protection."""
+
+    monkeypatch.chdir(tmp_path)
 
     input_path = (
         _write_valid_input(
@@ -2011,3 +2014,188 @@ def test_result_contains_filename_not_absolute_source_path(
         )
         not in result.input_name
     )
+
+
+def test_auto_mapping_completes_validation_without_modifying_source(
+    tmp_path: Path,
+    default_profile: ProfileDefinition,
+) -> None:
+    """Automatic lexical mapping precedes unchanged validator logic."""
+
+    input_path = (
+        tmp_path
+        / "auto.csv"
+    )
+
+    input_path.write_text(
+        (
+            "Study ID,Sample Identifier,"
+            "Experimental Condition,"
+            "Sample Preparation Batch,"
+            "Quantified Protein Group Count,"
+            "Protein Group Intensity Sum\n"
+            "STUDY001,S001,control,PREP01,1452,125000000.0\n"
+        ),
+        encoding="utf-8",
+        newline="",
+    )
+
+    before = input_path.read_bytes()
+
+    result = validate_input(
+        input_path,
+        default_profile,
+        auto_map=True,
+    )
+
+    assert result.status is ValidationStatus.COMPLETED
+    assert result.summary.total_findings == 0
+    assert result.column_mapping.mode.value == "automatic"
+    assert result.column_mapping.resolution_completed is True
+    assert len(result.column_mapping.entries) == 6
+    assert input_path.read_bytes() == before
+
+
+def test_explicit_mapping_publishes_mapping_provenance_without_local_path(
+    tmp_path: Path,
+) -> None:
+    """Explicit mappings appear by header identity while local paths stay private."""
+
+    input_path = (
+        tmp_path
+        / "explicit.csv"
+    )
+
+    input_path.write_text(
+        (
+            "Study,Sample Name,Condition,Prep Batch,"
+            "Protein Count,Total Intensity\n"
+            "STUDY001,S001,control,PREP01,1452,125000000.0\n"
+        ),
+        encoding="utf-8",
+        newline="",
+    )
+
+    mapping_path = (
+        tmp_path
+        / "mapping.json"
+    )
+
+    mapping_path.write_text(
+        (
+            "{\n"
+            '  "mapping_specification_version": "1.0.0",\n'
+            '  "columns": {\n'
+            '    "study_id": "Study",\n'
+            '    "sample_id": "Sample Name",\n'
+            '    "experimental_condition": "Condition",\n'
+            '    "sample_preparation_batch": "Prep Batch",\n'
+            '    "quantified_protein_group_count": "Protein Count",\n'
+            '    "protein_group_intensity_sum": "Total Intensity"\n'
+            "  }\n"
+            "}\n"
+        ),
+        encoding="utf-8",
+    )
+
+    output_path = (
+        tmp_path
+        / "report.md"
+    )
+
+    input_before = input_path.read_bytes()
+    mapping_before = mapping_path.read_bytes()
+
+    result = validate_and_write(
+        input_path,
+        output_path,
+        column_map=mapping_path,
+    )
+
+    assert result.status is ValidationStatus.COMPLETED
+    assert result.summary.total_findings == 0
+    assert result.column_mapping.mode.value == "explicit"
+    assert len(result.column_mapping.entries) == 6
+
+    report = output_path.read_text(
+        encoding="utf-8"
+    )
+
+    assert "## Column mapping" in report
+    assert "`Sample Name` -> `sample_id`" in report
+    assert str(mapping_path) not in report
+    assert str(tmp_path) not in report
+
+    assert input_path.read_bytes() == input_before
+    assert mapping_path.read_bytes() == mapping_before
+
+
+def test_mapping_file_cannot_be_selected_as_report_target(
+    tmp_path: Path,
+) -> None:
+    """Report publication cannot replace an explicit mapping file."""
+
+    input_path = _write_valid_input(
+        tmp_path
+    )
+
+    mapping_path = (
+        tmp_path
+        / "mapping.json"
+    )
+
+    original = (
+        '{"mapping_specification_version":"1.0.0",'
+        '"columns":{"study_id":"Study"}}\n'
+    )
+
+    mapping_path.write_text(
+        original,
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        OutputWriteError,
+        match="column-mapping file",
+    ):
+        validate_and_write(
+            input_path,
+            mapping_path,
+            overwrite=True,
+            column_map=mapping_path,
+        )
+
+    assert mapping_path.read_text(
+        encoding="utf-8"
+    ) == original
+
+
+def test_stopped_ingestion_records_mapping_stage_as_not_reached(
+    tmp_path: Path,
+    default_profile: ProfileDefinition,
+) -> None:
+    """Fatal ingestion stops before requested automatic mapping is resolved."""
+
+    input_path = (
+        tmp_path
+        / "empty.csv"
+    )
+
+    input_path.write_bytes(
+        b""
+    )
+
+    result = validate_input(
+        input_path,
+        default_profile,
+        auto_map=True,
+    )
+
+    assert result.status is (
+        ValidationStatus
+        .STOPPED_AFTER_INGESTION_FINDING
+    )
+
+    assert result.column_mapping.mode.value == "automatic"
+    assert result.column_mapping.resolution_completed is False
+    assert result.column_mapping.entries == ()

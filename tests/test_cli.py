@@ -9,6 +9,7 @@ import pytest
 from proteomics_csv_validation import __version__
 from proteomics_csv_validation import cli as cli_module
 from proteomics_csv_validation.errors import (
+    ColumnMappingError,
     InputAccessError,
     OutputWriteError,
     ProfileDefinitionError,
@@ -139,6 +140,7 @@ def test_stopped_result_returns_three_on_stdout(
         configured_rules=completed.configured_rules,
         findings=completed.findings,
         summary=completed.summary,
+        column_mapping=completed.column_mapping,
     )
 
     monkeypatch.setattr(
@@ -193,6 +195,12 @@ def test_stopped_result_returns_three_on_stdout(
             ),
             5,
         ),
+        (
+            ColumnMappingError(
+                "mapping failure"
+            ),
+            6,
+        ),
     ),
 )
 def test_expected_operational_failures_use_stderr(
@@ -235,3 +243,115 @@ def test_expected_operational_failures_use_stderr(
     assert captured.out == ""
     assert captured.err != ""
     assert "Traceback" not in captured.err
+
+
+def test_mapping_options_are_mutually_exclusive(
+    baseline_input_path: Path,
+    tmp_path: Path,
+) -> None:
+    """The command rejects simultaneous automatic and explicit mapping."""
+
+    with pytest.raises(
+        SystemExit
+    ) as captured:
+        cli_module.main(
+            [
+                str(
+                    baseline_input_path
+                ),
+                "--output",
+                str(
+                    tmp_path / "report.md"
+                ),
+                "--auto-map",
+                "--column-map",
+                str(
+                    tmp_path / "mapping.json"
+                ),
+            ]
+        )
+
+    assert captured.value.code == 2
+
+
+@pytest.mark.parametrize(
+    (
+        "mapping_arguments",
+        "expected_keyword",
+    ),
+    (
+        (
+            (
+                "--auto-map",
+            ),
+            "auto_map",
+        ),
+        (
+            (
+                "--column-map",
+                "mapping.json",
+            ),
+            "column_map",
+        ),
+    ),
+)
+def test_mapping_option_reaches_pipeline(
+    baseline_input_path: Path,
+    tmp_path: Path,
+    default_profile: ProfileDefinition,
+    monkeypatch: pytest.MonkeyPatch,
+    mapping_arguments: tuple[str, ...],
+    expected_keyword: str,
+) -> None:
+    """Selected mapping mode is forwarded to the publication pipeline."""
+
+    result = validate_input(
+        baseline_input_path,
+        default_profile,
+    )
+
+    output_path = (
+        tmp_path
+        / "report.md"
+    )
+
+    calls: list[
+        dict[str, object]
+    ] = []
+
+    def fake_validate_and_write(
+        input_path: Path,
+        output_path_argument: Path,
+        **kwargs: object,
+    ) -> ValidationResult:
+        assert input_path == baseline_input_path
+        assert output_path_argument == output_path
+
+        calls.append(
+            kwargs
+        )
+
+        return result
+
+    monkeypatch.setattr(
+        cli_module,
+        "validate_and_write",
+        fake_validate_and_write,
+    )
+
+    code = cli_module.main(
+        [
+            str(
+                baseline_input_path
+            ),
+            "--output",
+            str(
+                output_path
+            ),
+            *mapping_arguments,
+        ]
+    )
+
+    assert code == 0
+    assert len(calls) == 1
+    assert expected_keyword in calls[0]

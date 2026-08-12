@@ -782,7 +782,17 @@ def test_module_and_console_publish_equivalent_baseline_reports(
         )
 
         assert (
-            "synthetic"
+            "## data and scope boundary"
+            in report_text.lower()
+        )
+
+        assert (
+            "report format version: `1.1.0`"
+            in report_text.lower()
+        )
+
+        assert (
+            "profile version: `0.2.0`"
             in report_text.lower()
         )
 
@@ -822,7 +832,7 @@ def test_module_and_console_publish_equivalent_baseline_reports(
 
 def test_seeded_result_matches_expected_fixture_exactly(
     seeded_input_path: Path,
-    default_profile: ProfileDefinition,
+    legacy_profile: ProfileDefinition,
     loaded_seeded_expected: Mapping[
         str,
         object,
@@ -837,12 +847,12 @@ def test_seeded_result_matches_expected_fixture_exactly(
 
     first = validate_input(
         seeded_input_path,
-        default_profile,
+        legacy_profile,
     )
 
     second = validate_input(
         seeded_input_path,
-        default_profile,
+        legacy_profile,
     )
 
     assert first == second
@@ -877,7 +887,7 @@ def test_seeded_result_matches_expected_fixture_exactly(
 
 def test_required_value_missingness_result_matches_expected_fixture_exactly(
     required_value_missing_input_path: Path,
-    default_profile: ProfileDefinition,
+    legacy_profile: ProfileDefinition,
     loaded_required_value_missing_expected: Mapping[
         str,
         object,
@@ -892,12 +902,12 @@ def test_required_value_missingness_result_matches_expected_fixture_exactly(
 
     first = validate_input(
         required_value_missing_input_path,
-        default_profile,
+        legacy_profile,
     )
 
     second = validate_input(
         required_value_missing_input_path,
-        default_profile,
+        legacy_profile,
     )
 
     assert first == second
@@ -1416,3 +1426,181 @@ def test_console_wrapper_belongs_to_active_interpreter_scripts_directory(
     )
 
     assert console_script_path.is_file()
+
+
+def test_auto_mapping_console_process_publishes_zero_finding_report(
+    tmp_path: Path,
+    console_command_prefix: CommandPrefix,
+) -> None:
+    """Installed automatic mapping resolves conservative header variants."""
+
+    input_path = (
+        tmp_path
+        / "automatic.csv"
+    )
+
+    output_path = (
+        tmp_path
+        / "automatic_report.md"
+    )
+
+    input_path.write_text(
+        (
+            "Study ID,Sample Identifier,"
+            "Experimental Condition,"
+            "Sample Preparation Batch,"
+            "Quantified Protein Group Count,"
+            "Protein Group Intensity Sum\n"
+            "STUDY001,S001,control,PREP01,1452,125000000.0\n"
+        ),
+        encoding="utf-8",
+        newline="",
+    )
+
+    source_before = (
+        input_path.read_bytes()
+    )
+
+    completed = _run_process(
+        console_command_prefix,
+        (
+            input_path,
+            "--output",
+            output_path,
+            "--auto-map",
+        ),
+        cwd=tmp_path,
+    )
+
+    _assert_success_process(
+        completed
+    )
+
+    assert (
+        "mapping_mode: automatic"
+        in completed.stdout
+    )
+
+    assert (
+        "mapped_columns: 6"
+        in completed.stdout
+    )
+
+    assert (
+        "total_findings: 0"
+        in completed.stdout
+    )
+
+    report = output_path.read_text(
+        encoding="utf-8"
+    )
+
+    assert "## Column mapping" in report
+    assert "`Sample Identifier` -> `sample_id`" in report
+
+    _assert_report_hides_paths(
+        report,
+        input_path,
+        output_path,
+    )
+
+    assert (
+        input_path.read_bytes()
+        == source_before
+    )
+
+
+def test_explicit_mapping_module_process_preserves_mapping_file(
+    tmp_path: Path,
+    module_command_prefix: CommandPrefix,
+) -> None:
+    """Installed explicit mapping records provenance and preserves both inputs."""
+
+    input_path = (
+        tmp_path
+        / "explicit.csv"
+    )
+
+    mapping_path = (
+        tmp_path
+        / "mapping.json"
+    )
+
+    output_path = (
+        tmp_path
+        / "explicit_report.md"
+    )
+
+    input_path.write_text(
+        (
+            "Study,Sample Name,Condition,Prep Batch,"
+            "Protein Count,Total Intensity\n"
+            "STUDY001,S001,control,PREP01,1452,125000000.0\n"
+        ),
+        encoding="utf-8",
+        newline="",
+    )
+
+    mapping_path.write_text(
+        json.dumps(
+            {
+                "mapping_specification_version": "1.0.0",
+                "columns": {
+                    "study_id": "Study",
+                    "sample_id": "Sample Name",
+                    "experimental_condition": "Condition",
+                    "sample_preparation_batch": "Prep Batch",
+                    "quantified_protein_group_count": "Protein Count",
+                    "protein_group_intensity_sum": "Total Intensity",
+                },
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    input_before = input_path.read_bytes()
+    mapping_before = mapping_path.read_bytes()
+
+    completed = _run_process(
+        module_command_prefix,
+        (
+            input_path,
+            "--output",
+            output_path,
+            "--column-map",
+            mapping_path,
+        ),
+        cwd=tmp_path,
+    )
+
+    _assert_success_process(
+        completed
+    )
+
+    assert (
+        "mapping_mode: explicit"
+        in completed.stdout
+    )
+
+    assert (
+        "mapped_columns: 6"
+        in completed.stdout
+    )
+
+    report = output_path.read_text(
+        encoding="utf-8"
+    )
+
+    assert "`Sample Name` -> `sample_id`" in report
+
+    _assert_report_hides_paths(
+        report,
+        input_path,
+        mapping_path,
+        output_path,
+    )
+
+    assert input_path.read_bytes() == input_before
+    assert mapping_path.read_bytes() == mapping_before

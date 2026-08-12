@@ -6,6 +6,7 @@ from collections import Counter
 
 from proteomics_csv_validation.models import (
     CategoryCount,
+    ColumnMappingEvidence,
     CodeCount,
     Finding,
     FindingCategory,
@@ -260,6 +261,7 @@ def build_validation_result(
         Finding,
         ...,
     ],
+    column_mapping: ColumnMappingEvidence,
 ) -> ValidationResult:
     """Construct one immutable result from validated aggregate evidence."""
 
@@ -285,4 +287,5 @@ def build_validation_result(
         ),
         findings=ordered,
         summary=summary,
+        column_mapping=column_mapping,
     )

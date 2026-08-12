@@ -23,7 +23,7 @@ def test_default_profile_identity_and_required_order() -> None:
         == "proteomics_processed_sample_summary"
     )
 
-    assert profile.profile_version == "0.1.0"
+    assert profile.profile_version == "0.2.0"
 
     assert tuple(
         field.name
@@ -36,6 +36,18 @@ def test_default_profile_identity_and_required_order() -> None:
         "quantified_protein_group_count",
         "protein_group_intensity_sum",
     )
+
+
+def test_legacy_profile_remains_loadable() -> None:
+    """The reviewed synthetic profile remains addressable by exact version."""
+
+    profile = load_profile(
+        "proteomics_processed_sample_summary",
+        "0.1.0",
+    )
+
+    assert profile.profile_version == "0.1.0"
+    assert "Synthetic" in profile.description
 
 
 def test_unknown_profile_is_rejected() -> None:

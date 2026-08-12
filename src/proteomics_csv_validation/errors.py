@@ -27,5 +27,9 @@ class ProfileDefinitionError(ProfileError):
     """Raised when a profile resource violates its descriptor contract."""
 
 
+class ColumnMappingError(ProteomicsValidationError):
+    """Raised when requested column mapping cannot be resolved safely."""
+
+
 class OutputWriteError(ProteomicsValidationError):
     """Raised when a technical report cannot be published safely."""

@@ -19,7 +19,7 @@ from proteomics_csv_validation.models import (
 )
 
 
-_REPORT_FORMAT_VERSION = "1.0.0"
+_REPORT_FORMAT_VERSION = "1.1.0"
 
 
 def _code_span(
@@ -155,6 +155,11 @@ def _finding_lines(
         f"- Category: {_code_span(finding.category.value)}",
         f"- Severity: {_code_span(finding.severity.value)}",
         f"- Scope: {_code_span(finding.scope.value)}",
+        (
+            "- Rule: "
+            f"{_code_span(finding.rule.rule_id)} "
+            f"version {_code_span(finding.rule.rule_version)}"
+        ),
         f"- Location: {_code_span(location)}",
     ]
 
@@ -234,9 +239,53 @@ def render_markdown_report(
         f"- Profile ID: {_code_span(result.profile_id)}",
         f"- Profile version: {_code_span(result.profile_version)}",
         "",
-        "## Configured rules",
+        "## Column mapping",
+        "",
+        (
+            "- Mapping specification version: "
+            f"{_code_span(result.column_mapping.specification_version)}"
+        ),
+        (
+            "- Mapping mode: "
+            f"{_code_span(result.column_mapping.mode.value)}"
+        ),
+        (
+            "- Resolution status: "
+            f"{_code_span('completed' if result.column_mapping.resolution_completed else 'not_reached')}"
+        ),
+        (
+            "- Resolved columns: "
+            f"{_code_span(str(len(result.column_mapping.entries)))}"
+        ),
         "",
     ]
+
+    if result.column_mapping.entries:
+        lines.extend(
+            [
+                "### Resolved column names",
+                "",
+            ]
+        )
+
+        for entry in result.column_mapping.entries:
+            lines.append(
+                "- "
+                f"{_code_span(entry.source_field)} "
+                "-> "
+                f"{_code_span(entry.target_field)}"
+            )
+
+        lines.append(
+            ""
+        )
+
+    lines.extend(
+        [
+        "## Configured rules",
+        "",
+        ]
+    )
 
     for rule in result.configured_rules:
         lines.append(
@@ -341,11 +390,11 @@ def render_markdown_report(
         [
             "## Technical interpretation",
             "",
-            "The report records deterministic data-quality findings under the configured rules for technical review. A completed run with findings does not assign an acceptance decision. A stopped run indicates that a fatal ingestion condition ended the validation workflow before downstream validators ran.",
+            "Configured rules record detected structural conditions for technical review. Completed runs report the detected conditions. Reviewers decide dataset acceptance. Fatal ingestion conditions stop downstream validation and appear in the report when publication remains possible.",
             "",
             "## Data and scope boundary",
             "",
-            "The reviewed records are synthetic. The prototype evaluates CSV structure, sample identifiers, and required non-key values under the named profile and rule versions. The prototype does not process raw LC-MS data, normalize measurements, conduct statistical analysis, interpret biological or clinical meaning, establish repository conformance, or perform production deployment.",
+            "Version 0.3.0 checks CSV structure, sample identifiers, and required non-key values under the named profile and rule versions. Column mapping renames headers and preserves source values and physical row locations. Caller-supplied explicit mappings define source-to-profile header assignments. Scientific validity of caller-supplied header assignments requires dataset-specific review. Raw LC-MS processing, normalization, statistical analysis, biological or clinical interpretation, repository conformance, and production deployment are outside the application.",
         ]
     )
 
