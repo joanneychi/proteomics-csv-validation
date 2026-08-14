@@ -7,8 +7,9 @@
 - **Python:** 3.11 or newer
 - **Status:** Alpha
 
-## Development timeline
+## Release and maintenance
 
+`v0.4.0` is the current application release. The regression suite passed 111 tests at publication. Post-release maintenance updated the local deployment guide and added pull-request CI for changes targeting `main`. A tests-only patch added CSV-ingestion tests. Runtime application source and application version `0.4.0` did not change.
 
 ## Validation scope
 
@@ -247,6 +248,8 @@ Run the complete suite:
 ```bash
 python -m pytest
 ```
+
+Current `main` passes 126 tests. Twenty are in `tests/test_ingest.py`. When `v0.4.0` was published, the complete suite passed 111 tests and `tests/test_ingest.py` contained 5 tests. The 15 added tests cover existing CSV-ingestion behavior involving argument types, input access, decoding, parsing, headers, input limits, blank records, and record field counts.
 
 The test suite exercises validator logic, aggregation, ingestion, profile loading, profile selection, column mapping, CLI behavior, pipeline integration, report rendering, packaging, and end-to-end execution.
 
