@@ -10,10 +10,10 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "LicenseRef-Proprietary"
 authors = [
-  { name = "Joanne Yu Yan Chan" }
+  { name = "Joanne Y. Chan" }
 ]
 maintainers = [
-  { name = "Joanne Yu Yan Chan" }
+  { name = "Joanne Y. Chan" }
 ]
 keywords = [
   "proteomics",
