@@ -1,45 +1,212 @@
 # Proteomics CSV Validation System
 
-`proteomics-csv-validation` is a local Python command-line validator for processed-sample proteomics CSV files. The CLI resolves source headers to canonical profile fields when mapping is requested, checks required columns, sample identifiers, and required values, and writes a Markdown technical review report. Validation does not modify the source CSV.
+`proteomics-csv-validation` is a local Python command-line validator for processed-sample proteomics CSV files. CLI processing checks required columns, sample identifiers, and required values. Mapping options resolve source headers to field names defined by the selected profile. Each run writes a Markdown technical review report and preserves the source CSV. Findings identify structural conditions for review before downstream analysis.
 
 The system was developed during an eight-week graduate capstone and reached application version `0.4.0` by the end of the project.
 
-- **Author:** Joanne Yu Yan Chan
+- **Author:** Joanne Y. Chan
 - **Application version:** `0.4.0`
 - **Default profile:** `0.2.0`
 - **Reduced Metadata profile:** `0.3.0`
-- **Regression suite:** 126 passing tests
+- **Repository regression suite:** 126 passing tests
 - **Python:** `>=3.11`
-- **Status:** Alpha
+- **Development status:** Alpha
+
+## Quick start
+
+Begin with the project files already available locally. Run the commands from the repository root, the folder containing `pyproject.toml` and `README.md`.
+
+### Prerequisite
+
+Python 3.11 or newer is required. Editable installation may contact a package index for build requirements and pytest. Runtime validation reads local files and runs with the Python standard library.
+
+macOS or Linux:
+
+```bash
+python3 --version
+```
+
+Windows PowerShell:
+
+```powershell
+py --version
+```
+
+### Create an isolated environment and install the project
+
+macOS or Linux:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[dev]"
+```
+
+Windows PowerShell:
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev]"
+```
+
+`-e` installs the current project in editable mode. `.[dev]` installs pytest for repository verification. Runtime has zero third-party dependencies. Leave `.venv` active for the commands below.
+
+### Verify the installed command
+
+```bash
+proteomics-csv-validate --version
+proteomics-csv-validate --help
+```
+
+Expected version output:
+
+```text
+proteomics-csv-validate 0.4.0
+```
+
+Default profile `0.2.0` applies to the commands below. A profile defines required fields, and a finding is one reported condition at a file or row location.
+
+The examples exercise `schema` findings for missing required columns, `identifier` findings for blank or duplicate `sample_id`, and `missingness` findings for blank required values outside the `sample_id` key field. Console summaries also include `ingestion` for fatal input-processing findings. Strict mapping mode evaluates source headers as written.
+
+### Run the valid baseline
+
+Commands below are single-line commands compatible with macOS/Linux shells and Windows PowerShell after environment activation.
+
+```text
+proteomics-csv-validate data/synthetic/baseline_valid.csv --output reports/baseline_report.md --overwrite
+```
+
+Baseline execution processes eight records and reports zero findings. Expected output includes:
+
+```text
+status: completed
+rows: 8
+profile_version: 0.2.0
+mapping_mode: strict
+mapping_resolution: completed
+mapped_columns: 0
+total_findings: 0
+```
+
+`proteomics-csv-validate` writes the report to `reports/baseline_report.md` and preserves the input CSV. Each example includes `--overwrite` for repeat runs using the listed report paths; omit the flag to protect an existing report.
+
+### Run seeded structural findings
+
+```text
+proteomics-csv-validate data/synthetic/seeded_errors.csv --output reports/seeded_errors_report.md --overwrite
+```
+
+Expected output includes:
+
+```text
+rows: 8
+total_findings: 4
+category_counts:
+  ingestion: 0
+  schema: 1
+  identifier: 3
+  missingness: 0
+finding_code_counts:
+  SCHEMA_MISSING_REQUIRED_COLUMN: 1
+  IDENTIFIER_DUPLICATE_SAMPLE_ID: 2
+  IDENTIFIER_MISSING_SAMPLE_ID: 1
+```
+
+`seeded_errors.csv` contains one missing required column, two duplicate `sample_id` findings, and one blank `sample_id` finding.
+
+### Run required-value missingness
+
+```text
+proteomics-csv-validate data/synthetic/required_value_missing_values.csv --output reports/required_value_missing_values_report.md --overwrite
+```
+
+Expected output includes:
+
+```text
+rows: 8
+total_findings: 3
+category_counts:
+  ingestion: 0
+  schema: 0
+  identifier: 0
+  missingness: 3
+finding_code_counts:
+  MISSINGNESS_REQUIRED_VALUE: 3
+```
+
+`required_value_missing_values.csv` contains three required non-key values classified as missing with default profile `0.2.0`. Across the three examples, outputs cover the zero-finding case plus schema, identifier, and missingness findings.
+
+### Verify the repository suite
+
+```bash
+python -m pytest
+```
+
+Expected result:
+
+```text
+126 passed
+```
+
+For verified wheel installation and checksum procedures, see [LOCAL_WHEEL_DEPLOYMENT.md](docs/deployment/LOCAL_WHEEL_DEPLOYMENT.md).
+
+## Input requirements
+
+| Input property | Requirement |
+|---|---|
+| File | Accessible regular `.csv` file |
+| Encoding | UTF-8 with an optional byte-order mark (BOM) |
+| Header | Nonblank, with unique case-sensitive column names |
+| Record layout | One logical data record per physical line |
+| Maximum file size | 10,000,000 bytes |
+| Maximum data records | 100,000 |
+| Maximum columns | 1,000 |
+| Column order | Any order |
+| Additional columns | Accepted when column names are unique; validators inspect profile-defined fields |
+| Input and output paths | Different files |
+
+The selected profile determines required profile fields. Header mapping resolves supported source-header names to those fields.
+
+## How to read the version and result numbers
+
+| Term | Meaning in this project |
+|---|---|
+| **Application version** | Version embedded in the executable software, such as `0.4.0` |
+| **Release tag** | Git tag identifying a release snapshot, such as `v0.4.0` |
+| **Profile** | Versioned validation contract defining the processed-sample fields and which fields are required |
+| **Record** | One processed sample-summary row in an input CSV |
+| **Key field** | Record identifier field; `sample_id` is the key field in the built-in profiles |
+| **Finding** | One rule-detected condition at one applicable file or row location; a record may produce more than one finding |
+
+Application versions and profile versions advance independently. Release tag `v0.4.0` identifies application version `0.4.0`; profile `0.2.0` is the default, and `--profile-version 0.3.0` selects Reduced Metadata profile `0.3.0`.
 
 ## Release progression
 
-Application version `0.4.0` identifies the CLI package. Profile `0.3.0` identifies the Reduced Metadata validation contract introduced in `v0.4.0`. Profile `0.2.0` is the default validation contract.
+| Release tag | Application version | Default profile | Profiles packaged | Principal application change | Regression tests at tag |
+|---|---|---|---|---|---:|
+| `v0.1.0` | `0.1.0` | `0.1.0` | `0.1.0` | Initial local validation workflow | 67 |
+| `v0.2.0` | `0.2.0` | `0.1.0` | `0.1.0` | Required-value missingness validation | 75 |
+| `v0.3.0` | `0.3.0` | `0.2.0` | `0.1.0`, `0.2.0` | Automatic and explicit column mapping | 98 |
+| `v0.4.0` | `0.4.0` | `0.2.0` | `0.1.0`, `0.2.0`, `0.3.0` | Explicit profile selection and Reduced Metadata profile `0.3.0` | 111 |
 
-| Application release | Principal change | Tests at tag |
-|---|---|---:|
-| `v0.1.0` | Initial local validation workflow | 67 |
-| `v0.2.0` | Required-value missingness validation | 75 |
-| `v0.3.0` | Automatic and explicit column mapping | 98 |
-| `v0.4.0` | Explicit profile selection and Reduced Metadata profile `0.3.0` | 111 |
+`Profiles packaged` lists the profile resources included with each release. Application version `0.3.0` packaged profiles `0.1.0` and `0.2.0` but always loaded profile `0.2.0`. Release `v0.4.0` added `--profile-version` to select a registered profile. Omitting the option defaults to profile `0.2.0`; `--profile-version 0.3.0` selects the Reduced Metadata contract.
 
-The repository test suite passes 126 tests. `tests/test_ingest.py` contains 20 tests; the `v0.4.0` tag contains 5. Application source files under `src/proteomics_csv_validation/` are byte-identical to the `v0.4.0` tag.
+`v0.4.0` snapshot contains 111 regression tests; the current repository suite passes 126. Fifteen additional repository tests exercise ingestion behavior already present in the tagged runtime source. Application source files in `src/proteomics_csv_validation/` are byte-identical to the `v0.4.0` tag.
 
 ## Validation scope
 
-The application reports three structural finding groups:
+When ingestion and header resolution complete, the application applies three structural validator groups:
 
 - **Schema:** required profile columns missing from the CSV header
 - **Identifier:** blank or duplicate `sample_id` values
-- **Missingness:** blank required non-key values in required columns present in the CSV
+- **Missingness:** blank required values in non-key fields whose columns are present in the CSV
 
-Required-value missingness uses rule `missingness.required_value` version `1.0.0` and finding code `MISSINGNESS_REQUIRED_VALUE`.
-
-Column mapping precedes validation when `--auto-map` or `--column-map` is selected. Strict mode validates source headers unchanged.
+Fatal ingestion findings are reported separately and stop downstream validation. Required-value missingness uses rule `missingness.required_value` version `1.0.0` and finding code `MISSINGNESS_REQUIRED_VALUE`.
 
 ### Out of scope
 
-The application does not perform:
+Excluded functions:
 
 - raw LC-MS processing
 - vendor-format, mzML, or mzXML processing
@@ -56,73 +223,80 @@ The application does not perform:
 
 ## Processed-sample profiles
 
-`proteomics_processed_sample_summary` is the built-in profile ID. Descriptor schema version `1.0.0` defines the JSON profile structure. `sample_id` is the exact, case-sensitive record key. The record grain is a processed sample-summary row; the file grain is a study.
+`proteomics_processed_sample_summary` is the built-in profile ID. Descriptor schema version `1.0.0` defines the JSON profile structure. `sample_id` is the exact, case-sensitive record key. Each record represents a processed sample-summary row, and each file represents a study.
 
-### Profile `0.2.0`: Default
+### Profile evolution
 
-Profile `0.2.0` requires six fields:
+Profile versions identify the record contract applied during validation.
 
-1. `study_id`
-2. `sample_id`
-3. `experimental_condition`
-4. `sample_preparation_batch`
-5. `quantified_protein_group_count`
-6. `protein_group_intensity_sum`
+| Profile | Role in application history | Required-field policy | What changed |
+|---|---|---|---|
+| `0.1.0` | Default in applications `0.1.0` and `0.2.0` | Six required fields | Original profile; descriptions identify synthetic one-study records |
+| `0.2.0` | Default in applications `0.3.0` and `0.4.0` | Six required fields | Descriptions identify study-level records; validation requirements are unchanged from `0.1.0` |
+| `0.3.0` | Introduced in application `0.4.0` as the Reduced Metadata option | Four required fields; condition and preparation batch optional | Adds two optional metadata fields |
 
-### Profile `0.3.0`: Reduced Metadata
+### Exact profile `0.1.0` to `0.2.0` change
 
-Profile `0.3.0` requires four fields:
+Profiles `0.1.0` and `0.2.0` have identical six-field validation requirements. Their JSON resources differ in three values: `profile_version` and two descriptions. Profile `0.2.0` uses study-level language in the two changed descriptions.
 
-1. `study_id`
-2. `sample_id`
-3. `quantified_protein_group_count`
-4. `protein_group_intensity_sum`
+| JSON property | Profile `0.1.0` | Profile `0.2.0` |
+|---|---|---|
+| `profile_version` | `0.1.0` | `0.2.0` |
+| Top-level `description` | `Synthetic one-study processed-sample records for local technical data-quality review.` | `One-study processed-sample records for local technical data-quality review.` |
+| `study_id.description` | `Identifier for the synthetic study represented by the file.` | `Identifier for the study represented by the file.` |
 
-Under profile `0.3.0`, `experimental_condition` and `sample_preparation_batch` are optional. Supplied values are preserved. Omitted optional fields produce no schema or required-value missingness finding. Schema and required-value missingness checks apply to the four required fields.
+Unchanged profile properties are descriptor schema version, profile ID, entity type, title, record grain, file grain, field order and names, logical types, required flags, missing-value policies, key/factor/batch field designations, quantitative metric definitions, and CSV-dialect settings.
 
-Application version `0.4.0` packages profiles `0.3.0`, `0.2.0`, and `0.1.0`. Application release `v0.2.0` used profile `0.1.0`.
+### Required-field comparison
 
-## Processing path
+| Field | Profile `0.1.0` | Profile `0.2.0` | Profile `0.3.0` |
+|---|---|---|---|
+| `study_id` | Required | Required | Required |
+| `sample_id` | Required | Required | Required |
+| `experimental_condition` | Required | Required | Optional |
+| `sample_preparation_batch` | Required | Required | Optional |
+| `quantified_protein_group_count` | Required | Required | Required |
+| `protein_group_intensity_sum` | Required | Required | Required |
+
+Profile `0.3.0` changes requiredness for `experimental_condition` and `sample_preparation_batch`. With profile `0.3.0`, either metadata field may be supplied or omitted. Omission of either optional field yields zero schema and required-value missingness findings for that field. Schema and required-value missingness checks apply to the four required fields.
+
+## Profile selection
+
+`--profile-version` selects the validation contract. `--auto-map` and `--column-map` resolve source headers against that contract. Profile selection sets field requirements; mapping resolves header names.
+
+In the usage examples, replace `input.csv`, `mapping.json`, and `report.md` with your local paths. Examples assume field names from the selected profile unless a mapping option is shown.
+
+Omitting `--profile-version` defaults to profile `0.2.0`; `--profile-version 0.3.0` selects Reduced Metadata. Profile loading occurs before metadata validation. Source values are preserved; report metadata records the selected profile.
 
 ```text
-CSV input
-→ ingestion
-→ optional column mapping
-→ schema validation
-→ identifier validation
-→ required-value missingness validation
-→ finding aggregation
-→ Markdown report
+proteomics-csv-validate input.csv --profile-version 0.3.0 --output report.md
 ```
-
-Automatic and explicit mapping resolve source headers to canonical profile fields. Source values and physical CSV row numbers are preserved.
 
 ## Column mapping
 
+A canonical profile field is a field name defined by the selected profile, such as `sample_id`. Column mapping resolves source headers to canonical field names after profile loading and CSV ingestion, before validation. Mapping changes header interpretation and preserves source values and the source CSV. Findings report physical CSV row numbers.
+
 ### Strict mode
 
-Strict mode sends source headers to validation unchanged:
+Strict mode uses source headers exactly as provided:
 
-```bash
-proteomics-csv-validate input.csv \
-  --output report.md
+```text
+proteomics-csv-validate input.csv --output report.md
 ```
 
 ### Automatic mapping
 
-`--auto-map` resolves conservative lexical variants and profile field titles to canonical profile fields:
+`--auto-map` resolves conservative header-name variants and exact profile field titles to canonical profile fields:
 
-```bash
-proteomics-csv-validate input.csv \
-  --auto-map \
-  --output report.md
+```text
+proteomics-csv-validate input.csv --auto-map --output report.md
 ```
 
-Dataset-specific labels and ambiguous headers require an explicit mapping file.
+Dataset-specific labels or headers that automatic mapping cannot resolve unambiguously require an explicit mapping file.
 
 ### Explicit mapping
 
-Explicit mapping uses a versioned JSON file. Mapping keys are canonical profile fields; mapping values are source headers.
+Explicit mapping reads a versioned JSON file. Mapping keys are canonical profile fields; mapping values are source headers. Save the JSON example as `mapping.json` in the repository root, or choose another path and pass that path to `--column-map`.
 
 ```json
 {
@@ -134,76 +308,83 @@ Explicit mapping uses a versioned JSON file. Mapping keys are canonical profile 
 }
 ```
 
-```bash
-proteomics-csv-validate input.csv \
-  --column-map mapping.json \
-  --output report.md
+```text
+proteomics-csv-validate input.csv --column-map mapping.json --output report.md
 ```
 
-`--auto-map` and `--column-map` are mutually exclusive. Explicit mapping files use mapping specification version `1.0.0`.
+`--auto-map` and `--column-map` are mutually exclusive. Explicit mapping files specify mapping specification version `1.0.0`.
 
-## Profile selection
-
-Header mapping and profile selection are independent. `--auto-map` and `--column-map` resolve headers. `--profile-version` selects the validation contract.
-
-Omitting `--profile-version` uses profile `0.2.0`. `--profile-version 0.3.0` selects Reduced Metadata. Missing metadata does not select profile `0.3.0` automatically, and the application does not infer omitted values.
-
-```bash
-proteomics-csv-validate input.csv \
-  --profile-version 0.3.0 \
-  --auto-map \
-  --output report.md
-```
-
-## PXD060583 evaluation
-
-The PXD060583 evaluation derived 42 processed-sample rows from 42 MaxQuant LFQ experiment columns in the publicly deposited ProteomeXchange dataset `PXD060583`. `study_id` used the ProteomeXchange accession, `sample_id` used the MaxQuant experiment label, `quantified_protein_group_count` counted supplied positive values in the selected quantitative column, and `protein_group_intensity_sum` summed those values. The derived CSV was the application input; `proteinGroups.txt` supplied source material.
-
-The reviewed source material did not establish unambiguous values for `experimental_condition` or `sample_preparation_batch`. Application `v0.3.0` with profile `0.2.0` produced 84 findings across the 42 rows when those fields were blank. Application `v0.4.0` with profile `0.3.0` produced zero findings for the 42 rows. Strict, automatic, and explicit mapping produced identical finding totals for a given profile.
-
-A negative-control copy omitted a required quantitative value and produced a `MISSINGNESS_REQUIRED_VALUE` finding.
-
-The evaluation covered structural behavior of the derived CSV. The CLI accepts processed-sample CSV input. PRIDE archives, MaxQuant `proteinGroups.txt` files, spreadsheets, and raw LC-MS files are not CLI inputs. PRIDE/SDRF conformance, repository acceptance, normalization quality, scientific validity, and biological interpretation were outside the evaluation.
-
-## Installation
-
-For a release wheel, follow `docs/deployment/LOCAL_WHEEL_DEPLOYMENT.md`. For source checkout and local verification, use the editable installation below.
-
-### macOS or Linux
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
-```
-
-### Windows PowerShell
-
-```powershell
-py -m venv .venv
-.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
-```
-
-Runtime code uses the Python standard library. Installing `.[dev]` adds pytest.
-
-## Version check
-
-```bash
-proteomics-csv-validate --version
-```
-
-Expected output:
+## Processing path
 
 ```text
-proteomics-csv-validate 0.4.0
+CLI invocation
+→ load selected or default profile
+→ ingest CSV
+→ resolve headers: strict, automatic, or explicit
+→ schema validation
+→ identifier validation
+→ required-value missingness validation
+→ finding aggregation
+→ render Markdown report
+→ publish report atomically
 ```
+
+Atomic publication writes the complete report to a temporary file in the destination directory, then replaces the target.
+
+## PXD060583 public-data structural evaluation
+
+### Source and derivation
+
+Evaluation of PXD060583 covered 42 processed-sample records derived from 42 MaxQuant label-free quantification (LFQ) experiment columns in the publicly deposited ProteomeXchange dataset `PXD060583`. In each derived record, `study_id` records the ProteomeXchange accession and `sample_id` records the MaxQuant experiment label. For each LFQ intensity column, `quantified_protein_group_count` counted supplied positive values and `protein_group_intensity_sum` summed those values.
+
+Derived processed-sample CSV files were the application inputs. MaxQuant `proteinGroups.txt` supplied source material; the CLI input was the derived CSV files.
+
+### Worked example: one record, two findings
+
+Each finding represents one rule-detected condition at one location. Records can produce multiple findings.
+
+Review of the public source material left `experimental_condition` and `sample_preparation_batch` unresolved. One source-derived record illustrates how the two current profile contracts classify those fields.
+
+| Field | Source-derived state | Profile `0.2.0` | Profile `0.3.0` |
+|---|---|---|---|
+| `study_id` | Present | Required → 0 findings | Required → 0 findings |
+| `sample_id` | Present | Required → 0 findings | Required → 0 findings |
+| `experimental_condition` | Unresolved from reviewed public source material; blank in the six-field representation | Required → **1 finding** | Optional → 0 findings |
+| `sample_preparation_batch` | Unresolved from reviewed public source material; blank in the six-field representation | Required → **1 finding** | Optional → 0 findings |
+| `quantified_protein_group_count` | Present | Required → 0 findings | Required → 0 findings |
+| `protein_group_intensity_sum` | Present | Required → 0 findings | Required → 0 findings |
+
+Execution with profile `0.2.0` covered six columns with the two metadata values blank and produced two `MISSINGNESS_REQUIRED_VALUE` findings for the record. Execution with profile `0.3.0` covered four columns, omitted those optional metadata fields, and produced zero findings for those fields. Evaluation preserved the derived input metadata values.
+
+Across all 42 records:
+
+**42 records × 2 missing required values per record = 84 findings with profile `0.2.0`.**
+
+`42` counts **records**; `84` counts **field-level findings**: 42 for `experimental_condition` plus 42 for `sample_preparation_batch`.
+
+### Application and profile comparison
+
+All three rows cover 42 source-derived processed-sample records.
+
+| Application version | Selected profile | Records | Findings | Interpretation |
+|---|---|---:|---:|---|
+| `0.3.0` | default `0.2.0` | 42 | 84 | Six-field profile requires condition and batch |
+| `0.4.0` | default `0.2.0` | 42 | 84 | Application `0.4.0` also reports 84 with the default profile |
+| `0.4.0` | selected `0.3.0` | 42 | 0 | Result changes when the Reduced Metadata contract is selected |
+
+Application version `0.4.0` produces 84 findings with default profile `0.2.0` and zero with selected profile `0.3.0`, where the two unresolved metadata fields are optional. Mapping resolves headers, and the selected profile defines requiredness. PXD060583 source-derived metadata values are preserved.
+
+### Controls and interpretation
+
+Applying default profile `0.2.0` to a four-column PXD060583 representation reported two missing required columns: `experimental_condition` and `sample_preparation_batch`. Applying profile `0.3.0` to a six-column control produced zero findings when those optional fields were blank. Blanking required `quantified_protein_group_count` in the negative control produced one `MISSINGNESS_REQUIRED_VALUE` finding with profile `0.3.0`. Across the PXD060583 inputs, strict, automatic, and explicit mapping produced identical finding totals for each selected profile.
+
+Zero findings means the implemented structural rules emitted zero findings for the executed input with the selected profile and options. PRIDE/SDRF conformance, repository acceptance, normalization quality, scientific validity, and biological interpretation require dedicated evidence.
+
+CLI input is a processed-sample CSV. PRIDE archives, MaxQuant `proteinGroups.txt` files, Excel workbook files, and raw LC-MS files fall outside the CLI input type.
 
 ## Example fixtures
 
-Bundled fixtures use fixed expected finding counts:
+Bundled fixture records are synthetic with fixed expected finding counts. `Rows` is the number of data records. Fixture descriptions use physical CSV row numbers, with the header at row 1.
 
 | Fixture | Rows | Expected findings |
 |---|---:|---:|
@@ -215,28 +396,9 @@ Bundled fixtures use fixed expected finding counts:
 
 `required_value_missing_values.csv` contains a blank `experimental_condition` at CSV row 3, a whitespace-only `sample_preparation_batch` at row 5, and a blank `protein_group_intensity_sum` at row 7.
 
-Bundled fixture records are synthetic.
-
-### Run a fixture
-
-```bash
-proteomics-csv-validate \
-  data/synthetic/baseline_valid.csv \
-  --output reports/baseline_report.md
-```
-
-When the target report already exists, add `--overwrite`:
-
-```bash
-proteomics-csv-validate \
-  data/synthetic/baseline_valid.csv \
-  --output reports/baseline_report.md \
-  --overwrite
-```
-
 ## Reports
 
-Report format `1.1.0` records the following information:
+Report format `1.1.0` records:
 
 - application and profile identities
 - mapping mode and resolved header mappings
@@ -249,15 +411,15 @@ Report format `1.1.0` records the following information:
 - technical interpretation
 - implemented checks and excluded functions
 
-The command adds a missing parent directory for the selected output path, then writes the report. Existing report files require `--overwrite`.
+A missing output parent directory is created before report writing. Report publication is atomic: the application writes the completed report to a temporary file in the destination directory, then replaces the target. Existing report files require `--overwrite`.
 
 Reports record filenames. Absolute input, output, and mapping-file paths are omitted.
 
-Completed validation returns exit status `0`, including runs containing findings.
-
 ## Exit codes
 
-The CLI uses the following process exit codes:
+Findings are review results. Completed validation returns exit status `0` even when findings are reported.
+
+CLI process exit codes:
 
 - `0`: validation and report writing completed
 - `1`: unexpected internal failure
@@ -267,7 +429,7 @@ The CLI uses the following process exit codes:
 - `5`: report-writing failure
 - `6`: column-mapping configuration or resolution failure
 
-## Tests and CI
+## Tests and continuous integration (CI)
 
 Run the complete suite:
 
@@ -275,11 +437,11 @@ Run the complete suite:
 python -m pytest
 ```
 
-The complete suite passes 126 tests. `tests/test_ingest.py` contains 20 ingestion tests; the `v0.4.0` tag contains 5. The 15 added tests cover argument types, CSV-extension checks, file access, UTF-8/BOM/NUL handling, parser failures, header validation, byte, row, and column limits, blank records, and record width.
+Current repository suite passes 126 tests. `tests/test_ingest.py` contains 20 ingestion regression tests; the `v0.4.0` tagged snapshot contained 5. Fifteen added tests exercise existing ingestion behavior involving argument types, CSV-extension checks, file access, UTF-8 byte-order-mark (BOM) and NUL-byte handling, parser failures, header validation, byte, row, and column limits, blank records, and record width.
 
-The full suite covers validator logic, aggregation, ingestion, profile loading, profile selection, column mapping, CLI behavior, pipeline integration, report rendering, packaging, and end-to-end execution.
+The suite exercises validator logic, aggregation, ingestion, profile loading, profile selection, column mapping, CLI behavior, pipeline integration, report rendering, packaging, and end-to-end execution.
 
-GitHub Actions runs seven jobs for pull requests targeting `main` and pushes to `main`: six test environments and a build-artifacts job. The test environments are Ubuntu with Python 3.11, 3.12, 3.13, and 3.14; Windows with Python 3.14; and macOS with Python 3.14. The workflow supports manual dispatch and stops at build artifacts.
+GitHub Actions runs seven jobs for pull requests targeting `main` and for pushes to `main`: six test environments and a build-artifacts job. Six test environments cover Ubuntu with Python 3.11, 3.12, 3.13, and 3.14; Windows with Python 3.14; and macOS with Python 3.14. Manual dispatch is also available. Release publication is outside the workflow.
 
 ## Repository structure
 
@@ -302,28 +464,61 @@ src/
     column_mapping.py  header mapping
     ingest.py     CSV ingestion and file checks
     pipeline.py   validation workflow
-    report.py     Markdown rendering and file writing
+    report.py     Markdown rendering and atomic report publication
 tests/            automated test suite
 MANIFEST.in       source-distribution inclusion rules
 README.md         project documentation
 pyproject.toml    package and test configuration
 ```
 
-## Package build
+## Optional: build distribution artifacts
 
-Build the source distribution and wheel from the repository root:
+Building distribution artifacts is optional for local validation. To build a source distribution and wheel from the repository root:
 
 ```bash
-python -m pip install --upgrade build
+python -m pip install build
 python -m build
 ```
 
 `python -m build` writes the source distribution and wheel to `dist/`.
 
+## Help and local troubleshooting
+
+Show all CLI options:
+
+```bash
+proteomics-csv-validate --help
+```
+
+Verify the active installation:
+
+```bash
+proteomics-csv-validate --version
+```
+
+Common local setup conditions:
+
+| Condition | Action |
+|---|---|
+| CLI command unavailable after installation | Confirm that `.venv` is active, then rerun the version check |
+| Python version below 3.11 | Switch to a supported interpreter |
+| Report path already exists | Add `--overwrite` when replacement is intended |
+
+If Windows PowerShell blocks `Activate.ps1`, run the virtual-environment executables directly and leave the system execution policy unchanged. From the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\proteomics-csv-validate.exe --version
+```
+
+For the PowerShell fallback, run `.\.venv\Scripts\proteomics-csv-validate.exe` for CLI commands and `.\.venv\Scripts\python.exe` for Python commands.
+
+For the detailed wheel-installation, checksum, smoke-test, and rollback procedure, see [LOCAL_WHEEL_DEPLOYMENT.md](docs/deployment/LOCAL_WHEEL_DEPLOYMENT.md).
+
 ## Data and privacy
 
-Bundled fixtures are synthetic. The PXD060583 evaluation documents the public source used to derive the 42-row CSV. Institutional, proprietary, or restricted datasets require authorization plus storage and access controls appropriate to their classification. The CLI reads a selected local CSV and writes the report to a selected local path.
+Bundled fixtures are synthetic. PXD060583 supplies the public source for the 42-record processed-sample evaluation inputs. Institutional, proprietary, or restricted datasets require the applicable authorization and storage/access controls. CLI execution reads a selected local CSV and writes the report to a selected local path.
 
 ## License
 
-License identifier: `LicenseRef-Proprietary`.
+Proprietary software. License identifier: `LicenseRef-Proprietary`.
