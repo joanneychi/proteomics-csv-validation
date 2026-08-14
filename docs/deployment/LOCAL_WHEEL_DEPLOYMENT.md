@@ -2,9 +2,9 @@
 
 ## Selected method
 
-Deploy `proteomics-csv-validation` version `0.2.0` as its verified wheel inside a dedicated Python virtual environment on an authorized local workstation.
+Deploy `proteomics-csv-validation` version `0.4.0` as its verified wheel inside a dedicated Python virtual environment on an authorized local workstation.
 
-This method matches the existing command-line architecture, local-file workflow, zero third-party runtime dependencies, and synthetic-data boundary. It does not create a hosted service, production web application, database, API, or continuous-deployment pipeline.
+This method matches the local command-line architecture, local-file workflow, zero third-party runtime dependencies, and documented compatible-input boundary. It does not create a hosted service, production web application, database, API, or continuous-deployment pipeline.
 
 ## Prerequisites
 
@@ -13,7 +13,7 @@ This method matches the existing command-line architecture, local-file workflow,
 - `pip`
 - local file-system access
 - verified release wheel
-- authorized synthetic CSV inputs
+- authorized compatible CSV inputs
 
 Required runtime environment variables: none.
 
@@ -22,13 +22,13 @@ Required runtime environment variables: none.
 Compare the wheel with the published SHA-256 record before installation.
 
 ```bash
-shasum -a 256 proteomics_csv_validation-0.2.0-py3-none-any.whl
+shasum -a 256 proteomics_csv_validation-0.4.0-py3-none-any.whl
 ```
 
 Expected SHA-256:
 
 ```text
-8079febb626c8cd532542eefd2230d4e10cf61a0d6145f04ff5d1acfc96a7fc9
+60334b89eddd8655470e935c9f84ecfe9fcf00bb18007f147a689d375363845b
 ```
 
 Linux systems may use `sha256sum`. Windows PowerShell may use `Get-FileHash -Algorithm SHA256`.
@@ -38,7 +38,7 @@ Linux systems may use `sha256sum`. Windows PowerShell may use `Get-FileHash -Alg
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install --no-deps proteomics_csv_validation-0.2.0-py3-none-any.whl
+python -m pip install --no-deps proteomics_csv_validation-0.4.0-py3-none-any.whl
 python -m pip check
 proteomics-csv-validate --version
 ```
@@ -48,14 +48,14 @@ proteomics-csv-validate --version
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install --no-deps proteomics_csv_validation-0.2.0-py3-none-any.whl
+python -m pip install --no-deps proteomics_csv_validation-0.4.0-py3-none-any.whl
 python -m pip check
 proteomics-csv-validate --version
 ```
 
 ## Smoke-test fixture
 
-The wheel contains the runtime package and built-in profile, but it does not contain the project’s top-level test fixtures. Obtain `baseline_valid.csv` from the certified `v0.2.0` source distribution or repository and place it in the deployment working directory.
+The release wheel installs the runtime application. Obtain `baseline_valid.csv` from the certified `v0.4.0` source tree and place it in the deployment working directory.
 
 Verify the fixture before use:
 
@@ -88,14 +88,16 @@ total_findings: 0
 
 | Configuration item | Verified value |
 |---|---|
-| Application version | `0.2.0` |
+| Application version | `0.4.0` |
 | Python requirement | `>=3.11` |
 | Runtime dependencies | none |
 | Console command | `proteomics-csv-validate` |
-| Built-in profile | `proteomics_processed_sample_summary` |
-| Profile version | `0.1.0` |
+| Built-in profile ID | `proteomics_processed_sample_summary` |
+| Default profile version | `0.2.0` |
+| Reduced Metadata profile version | `0.3.0`, selected explicitly with `--profile-version 0.3.0` |
 | Descriptor schema | `1.0.0` |
-| Report format | `1.0.0` |
+| Column-mapping specification | `1.0.0` |
+| Report format | `1.1.0` |
 | Required environment variables | none |
 | Input encoding | UTF-8, optional BOM |
 | Maximum input bytes | 10,000,000 |
@@ -129,7 +131,7 @@ No remote telemetry or user tracking is required.
 6. Redirect local use to the verified rollback environment.
 7. Document the reason, time, version, and verification result.
 
-Version `v0.1.0` is the historical rollback baseline. An installable `v0.1.0` artifact must be retained or rebuilt from its preserved tag before operational rollback is needed.
+For rollback from `v0.4.0`, `v0.3.0` is the immediate prior verified release. Earlier preserved releases `v0.2.0` and `v0.1.0` remain historical recovery points. Select a rollback version only after confirming that its documented capabilities meet the required use case.
 
 ## Deferred deployment methods
 
@@ -141,4 +143,4 @@ A container remains optional future portability work. Hosted on-premises or clou
 - Python Packaging User Guide, packaging flow and wheel installation
 - Python documentation, `venv`
 
-Retrieval date: July 28, 2026.
+Retrieval date: August 13, 2026.
