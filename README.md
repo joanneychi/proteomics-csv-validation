@@ -2,6 +2,8 @@
 
 `proteomics-csv-validation` is a local Python command-line validator for processed-sample proteomics CSV files. The CLI resolves source headers to canonical profile fields when mapping is requested, checks required columns, sample identifiers, and required values, and writes a Markdown technical review report. Validation does not modify the source CSV.
 
+The system was developed during an eight-week graduate capstone and reached application version `0.4.0` by the end of the project.
+
 - **Author:** Joanne Yu Yan Chan
 - **Application version:** `0.4.0`
 - **Default profile:** `0.2.0`
