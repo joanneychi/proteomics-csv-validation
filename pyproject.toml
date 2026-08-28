@@ -53,6 +53,7 @@ include = ["proteomics_csv_validation*"]
 namespaces = false
 
 [tool.setuptools.package-data]
+"proteomics_csv_validation.infrastructure.sqlite" = ["migrations/*.sql"]
 "proteomics_csv_validation.profiles" = ["data/*.json"]
 
 [tool.pytest.ini_options]
