@@ -1143,7 +1143,7 @@ def test_ingestion_stop_status_is_visible_and_distinct_from_execution_success(
             b"study_id\n\xff\n",
         ),
         (
-            "nul",
+            "nul-byte",
             b"study_id\nSTUDY\x00" b"001\n",
         ),
         (
