@@ -1,0 +1,126 @@
+:root {
+  --ink: #172033;
+  --navy: #173b5e;
+  --gold: #7a5600;
+  --paper: #fffdf9;
+  --mist: #eef3f7;
+  --neutral: #e9eef3;
+  --apricot: #fbf0e7;
+  --muted: #526174;
+  --white: #ffffff;
+  --content-width: 1180px;
+  --reading-width: 760px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  color: var(--ink);
+  background: var(--paper);
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  line-height: 1.5;
+}
+
+body {
+  min-width: 0;
+  margin: 0;
+  background: var(--paper);
+}
+
+a {
+  color: var(--navy);
+}
+
+:where(
+  a,
+  button,
+  input,
+  select,
+  textarea,
+  [tabindex]
+):focus-visible {
+  outline: 3px solid var(--white);
+  outline-offset: 2px;
+  box-shadow:
+    0 0 0 5px var(--navy);
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 100;
+  top: 1rem;
+  left: 1rem;
+  padding: 0.7rem 0.9rem;
+  transform: translateY(-200%);
+  background: var(--ink);
+  color: var(--white);
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
+.app-header {
+  border-bottom: 1px solid var(--neutral);
+  background: var(--paper);
+}
+
+.app-shell,
+.app-main {
+  width: min(
+    calc(100% - 2rem),
+    var(--content-width)
+  );
+  margin-inline: auto;
+}
+
+.app-shell {
+  display: flex;
+  gap: 1rem;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-block: 1rem;
+}
+
+.app-name {
+  font-weight: 700;
+}
+
+.app-context {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.app-main {
+  padding-block: 2rem 4rem;
+}
+
+@media (max-width: 40rem) {
+  .app-shell {
+    display: block;
+  }
+
+  .app-context {
+    display: block;
+    margin-top: 0.2rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+  <title>
+    {% block title %}Proteomics CSV Validation{% endblock %}
+  </title>
+  <link
+    rel="stylesheet"
+    href="/static/app.css"
+  >
+</head>
+<body>
+  <a
+    class="skip-link"
+    href="#main-content"
+  >Skip to main content</a>
+
+  <header class="app-header">
+    <div class="app-shell">
+      <span class="app-name">
+        Proteomics CSV Validation
+      </span>
+      <span class="app-context">
+        Local structural review
+      </span>
+    </div>
+  </header>
+
+  <main
+    id="main-content"
+    class="app-main"
+  >
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

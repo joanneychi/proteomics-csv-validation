@@ -39,9 +39,16 @@ dependencies = []
 dev = [
   "pytest>=8.0,<9"
 ]
+web = [
+  "fastapi==0.141.1",
+  "uvicorn==0.52.4",
+  "Jinja2==3.1.6",
+  "python-multipart==0.0.32"
+]
 
 [project.scripts]
 proteomics-csv-validate = "proteomics_csv_validation.cli:main"
+proteomics-csv-app = "proteomics_csv_validation.web.cli:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
@@ -55,6 +62,8 @@ namespaces = false
 [tool.setuptools.package-data]
 "proteomics_csv_validation.infrastructure.sqlite" = ["migrations/*.sql"]
 "proteomics_csv_validation.profiles" = ["data/*.json"]
+
+"proteomics_csv_validation.web" = ["templates/*.html", "static/*.css"]
 
 [tool.pytest.ini_options]
 addopts = "-ra"
