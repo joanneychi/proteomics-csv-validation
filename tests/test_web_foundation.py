@@ -424,7 +424,6 @@ def test_invalid_host_is_rejected_with_security_headers() -> None:
 def test_web_foundation_does_not_import_certified_inner_layers() -> None:
     forbidden = (
         "proteomics_csv_validation.adapters",
-        "proteomics_csv_validation.application",
         "proteomics_csv_validation.domain",
         "proteomics_csv_validation.infrastructure",
         "proteomics_csv_validation.models",
@@ -433,12 +432,41 @@ def test_web_foundation_does_not_import_certified_inner_layers() -> None:
         "proteomics_csv_validation.validators",
     )
 
+    allowed_application = (
+        "proteomics_csv_validation.application.browser_review"
+    )
+
+    composition_bridge = (
+        "proteomics_csv_validation.review_composition"
+    )
+
     for path in _WEB.glob(
         "*.py"
     ):
         for module in _imports(
             path
         ):
+            if module.startswith(
+                "proteomics_csv_validation.application"
+            ):
+                assert (
+                    path.name == "review.py"
+                    and module == allowed_application
+                ), (
+                    path,
+                    module,
+                )
+
+                continue
+
+            if module == composition_bridge:
+                assert path.name == "composition.py", (
+                    path,
+                    module,
+                )
+
+                continue
+
             assert not module.startswith(
                 forbidden
             ), (
@@ -534,6 +562,7 @@ def test_pyproject_preserves_base_runtime_and_adds_exact_web_extra() -> None:
         "dev"
     ] == [
         "pytest>=8.0,<9",
+        "httpx2==2.12.0",
     ]
 
     assert project[

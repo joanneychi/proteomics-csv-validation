@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block title %}Review · Proteomics CSV Validation{% endblock %}
+
+{% block content %}
+<section
+  class="page-heading"
+  aria-labelledby="review-title"
+>
+  <p class="eyebrow">
+    Local structural review
+  </p>
+
+  <h1 id="review-title">
+    Review a processed-sample CSV
+  </h1>
+
+  <p class="lede">
+    Run the deterministic structural validator against one local CSV.
+    Source bytes are staged only for the review and are removed afterward.
+  </p>
+</section>
+
+{% if errors %}
+<section
+  class="error-summary"
+  role="alert"
+  aria-labelledby="error-summary-title"
+>
+  <h2 id="error-summary-title">
+    Review submission needs attention
+  </h2>
+
+  <ul>
+    {% for error in errors %}
+    <li>
+      <a href="#{{ error.field }}">
+        {{ error.message }}
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<form
+  class="review-form"
+  action="/reviews"
+  method="post"
+  enctype="multipart/form-data"
+>
+  <input
+    type="hidden"
+    name="csrf_token"
+    value="{{ csrf_token }}"
+  >
+
+  <div class="field">
+    <label for="input-file">
+      Processed-sample CSV
+    </label>
+
+    <p
+      id="input-file-help"
+      class="field-help"
+    >
+      CSV only. Maximum staged size: 10 MB.
+    </p>
+
+    <input
+      id="input-file"
+      name="input_file"
+      type="file"
+      accept=".csv,text/csv"
+      required
+      aria-describedby="input-file-help"
+      {% if "input-file" in error_fields %}aria-invalid="true"{% endif %}
+    >
+  </div>
+
+  <div class="field">
+    <label for="profile-version">
+      Review profile
+    </label>
+
+    <p
+      id="profile-help"
+      class="field-help"
+    >
+      The processed-sample profile is the default.
+      Historical compatibility remains available for earlier records.
+    </p>
+
+    <select
+      id="profile-version"
+      name="profile_version"
+      aria-describedby="profile-help"
+      {% if "profile-version" in error_fields %}aria-invalid="true"{% endif %}
+    >
+      {% for version, label, historical in profiles %}
+      <option
+        value="{{ version }}"
+        {% if values.profile_version == version %}selected{% endif %}
+      >
+        {{ version }} · {{ label }}{% if historical %} · historical{% endif %}
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="mapping-mode">
+      Column mapping
+    </label>
+
+    <p
+      id="mapping-mode-help"
+      class="field-help"
+    >
+      Strict expects canonical headers.
+      Automatic uses deterministic mapping rules.
+      Explicit requires a JSON mapping file.
+    </p>
+
+    <select
+      id="mapping-mode"
+      name="mapping_mode"
+      aria-describedby="mapping-mode-help"
+      {% if "mapping-mode" in error_fields %}aria-invalid="true"{% endif %}
+    >
+      {% for mode in mapping_modes %}
+      <option
+        value="{{ mode }}"
+        {% if values.mapping_mode == mode %}selected{% endif %}
+      >
+        {{ mode|capitalize }}
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="mapping-file">
+      Explicit mapping JSON
+    </label>
+
+    <p
+      id="mapping-file-help"
+      class="field-help"
+    >
+      Optional unless Explicit mapping is selected.
+      Maximum staged size: 1 MB.
+    </p>
+
+    <input
+      id="mapping-file"
+      name="mapping_file"
+      type="file"
+      accept=".json,application/json"
+      aria-describedby="mapping-file-help"
+      {% if "mapping-file" in error_fields %}aria-invalid="true"{% endif %}
+    >
+  </div>
+
+  <div class="form-actions">
+    <button
+      class="primary-action"
+      type="submit"
+    >
+      Run structural review
+    </button>
+  </div>
+</form>
+
+<aside
+  class="scope-note"
+  aria-labelledby="scope-note-title"
+>
+  <h2 id="scope-note-title">
+    Interpretation boundary
+  </h2>
+
+  <p>
+    Findings describe the configured structural validation rules.
+    A zero-finding result does not establish scientific validity,
+    biological correctness, or approval.
+  </p>
+</aside>
+{% endblock %}

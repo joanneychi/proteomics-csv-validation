@@ -7,6 +7,45 @@ from pathlib import Path
 from typing import Any, Protocol
 
 
+class StructuralReviewFailure(
+    RuntimeError
+):
+    """Safe application-facing failure for expected review operations."""
+
+    def __init__(
+        self,
+        code: str,
+        message: str,
+    ) -> None:
+        if (
+            not isinstance(
+                code,
+                str,
+            )
+            or code == ""
+        ):
+            raise ValueError(
+                "Structural-review failure code must be nonempty."
+            )
+
+        if (
+            not isinstance(
+                message,
+                str,
+            )
+            or message == ""
+        ):
+            raise ValueError(
+                "Structural-review failure message must be nonempty."
+            )
+
+        self.code = code
+
+        super().__init__(
+            message
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class StructuralReviewRequest:
     """Inputs already supported by the certified structural validator."""

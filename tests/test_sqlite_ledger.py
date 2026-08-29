@@ -1592,7 +1592,15 @@ def test_infrastructure_import_boundaries() -> None:
     for path in package.rglob(
         "*.py"
     ):
-        if "infrastructure" in path.parts:
+        if (
+            "infrastructure"
+            in path.parts
+            or path
+            == (
+                package
+                / "review_composition.py"
+            )
+        ):
             continue
 
         tree = ast.parse(

@@ -381,18 +381,47 @@ def test_explicit_mapping_equals_existing_core(
     )
 
 
-def test_unknown_profile_version_preserves_existing_error():
-    request = StructuralReviewRequest(
-        input_path=_BASELINE,
-        profile_version="99.0.0",
+def test_unknown_profile_version_is_translated_at_application_boundary() -> None:
+    import pytest
+
+    from proteomics_csv_validation.adapters.core_validation import (
+        LegacyCoreValidationAdapter,
+    )
+    from proteomics_csv_validation.application.structural_review import (
+        StructuralReviewFailure,
+        StructuralReviewRequest,
+        StructuralReviewService,
+    )
+
+    baseline = (
+        Path(__file__).resolve().parents[1]
+        / "data"
+        / "synthetic"
+        / "baseline_valid.csv"
+    )
+
+    service = StructuralReviewService(
+        LegacyCoreValidationAdapter()
     )
 
     with pytest.raises(
-        ProfileNotFoundError
-    ):
-        _service().review(
-            request
+        StructuralReviewFailure
+    ) as captured:
+        service.review(
+            StructuralReviewRequest(
+                input_path=baseline,
+                profile_version="999.999.999",
+            )
         )
+
+    assert captured.value.code == "PROFILE"
+    assert str(
+        baseline.resolve()
+    ) not in str(
+        captured.value
+    )
+
+
 
 
 def test_application_layer_does_not_import_core_or_adapters():
@@ -446,6 +475,13 @@ def test_existing_core_does_not_import_new_outer_layers():
             in path.parts
             or "adapters"
             in path.parts
+            or "web"
+            in path.parts
+            or path
+            == (
+                _PACKAGE
+                / "review_composition.py"
+            )
         ):
             continue
 
@@ -461,3 +497,160 @@ def test_existing_core_does_not_import_new_outer_layers():
                 f"new outer layer "
                 f"{module}"
             )
+
+
+def test_missing_input_error_is_translated_without_private_path(
+    tmp_path: Path,
+) -> None:
+    from proteomics_csv_validation.adapters.core_validation import (
+        LegacyCoreValidationAdapter,
+    )
+    from proteomics_csv_validation.application.structural_review import (
+        StructuralReviewFailure,
+        StructuralReviewRequest,
+        StructuralReviewService,
+    )
+
+    missing = (
+        tmp_path
+        / "private-source.csv"
+    )
+
+    service = StructuralReviewService(
+        LegacyCoreValidationAdapter()
+    )
+
+    with pytest.raises(
+        StructuralReviewFailure
+    ) as captured:
+        service.review(
+            StructuralReviewRequest(
+                input_path=missing,
+                profile_version="0.2.0",
+            )
+        )
+
+    assert captured.value.code == (
+        "INPUT_ACCESS"
+    )
+
+    assert str(
+        missing
+    ) not in str(
+        captured.value
+    )
+
+    assert missing.name not in str(
+        captured.value
+    )
+
+
+def test_column_mapping_error_is_translated_without_core_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import proteomics_csv_validation.adapters.core_validation as core_validation
+
+    from proteomics_csv_validation.application.structural_review import (
+        StructuralReviewFailure,
+        StructuralReviewRequest,
+        StructuralReviewService,
+    )
+    from proteomics_csv_validation.errors import (
+        ColumnMappingError,
+    )
+
+    secret = (
+        "/private/internal/mapping.json"
+    )
+
+    def fail_validation(
+        *args,
+        **kwargs,
+    ):
+        raise ColumnMappingError(
+            secret
+        )
+
+    monkeypatch.setattr(
+        core_validation,
+        "validate_input",
+        fail_validation,
+    )
+
+    baseline = (
+        Path(__file__).resolve().parents[1]
+        / "data"
+        / "synthetic"
+        / "baseline_valid.csv"
+    )
+
+    service = StructuralReviewService(
+        core_validation.LegacyCoreValidationAdapter()
+    )
+
+    with pytest.raises(
+        StructuralReviewFailure
+    ) as captured:
+        service.review(
+            StructuralReviewRequest(
+                input_path=baseline,
+                profile_version="0.2.0",
+            )
+        )
+
+    assert captured.value.code == (
+        "COLUMN_MAPPING"
+    )
+
+    assert secret not in str(
+        captured.value
+    )
+
+
+def test_unexpected_programming_error_remains_unwrapped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import proteomics_csv_validation.adapters.core_validation as core_validation
+
+    from proteomics_csv_validation.application.structural_review import (
+        StructuralReviewRequest,
+        StructuralReviewService,
+    )
+
+    def fail_unexpectedly(
+        *args,
+        **kwargs,
+    ):
+        raise RuntimeError(
+            "unexpected-programming-defect"
+        )
+
+    monkeypatch.setattr(
+        core_validation,
+        "validate_input",
+        fail_unexpectedly,
+    )
+
+    baseline = (
+        Path(__file__).resolve().parents[1]
+        / "data"
+        / "synthetic"
+        / "baseline_valid.csv"
+    )
+
+    service = StructuralReviewService(
+        core_validation.LegacyCoreValidationAdapter()
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match=(
+            "unexpected-programming-defect"
+        ),
+    ):
+        service.review(
+            StructuralReviewRequest(
+                input_path=baseline,
+                profile_version="0.2.0",
+            )
+        )

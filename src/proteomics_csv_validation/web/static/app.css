@@ -124,3 +124,188 @@ a {
     animation-iteration-count: 1 !important;
   }
 }
+
+.page-heading,
+.review-form,
+.error-summary,
+.scope-note,
+.result-panel,
+.page-actions {
+  width: min(
+    100%,
+    var(--reading-width)
+  );
+}
+
+.page-heading {
+  margin-bottom: 1.5rem;
+}
+
+.page-heading h1 {
+  margin-block: 0.25rem 0.75rem;
+  line-height: 1.15;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--gold);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lede,
+.field-help,
+.scope-note,
+.scope-warning {
+  color: var(--muted);
+}
+
+.review-form,
+.result-panel,
+.scope-note,
+.error-summary {
+  border: 1px solid var(--neutral);
+  border-radius: 0.75rem;
+  background: var(--white);
+}
+
+.review-form {
+  display: grid;
+  gap: 1.5rem;
+  padding: 1.5rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.field label {
+  font-weight: 700;
+}
+
+.field-help {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+input[type="file"],
+select {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--muted);
+  border-radius: 0.4rem;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+}
+
+[aria-invalid="true"] {
+  border-width: 2px;
+  border-color: var(--gold);
+}
+
+.form-actions {
+  padding-top: 0.25rem;
+}
+
+.primary-action {
+  min-height: 2.75rem;
+  padding: 0.7rem 1rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: var(--navy);
+  color: var(--white);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary-action:hover {
+  background: var(--ink);
+}
+
+.error-summary {
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.25rem;
+  border-color: var(--gold);
+  background: var(--apricot);
+}
+
+.error-summary h2,
+.scope-note h2,
+.result-panel h2 {
+  margin-top: 0;
+}
+
+.error-summary a {
+  font-weight: 700;
+}
+
+.scope-note,
+.result-panel {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+}
+
+.scope-note p,
+.scope-warning {
+  margin-bottom: 0;
+}
+
+.finding-count {
+  margin-block: 0.5rem 1rem;
+  font-size: 1.15rem;
+}
+
+.finding-count strong {
+  font-size: 1.8rem;
+}
+
+.evidence-grid {
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+}
+
+.evidence-grid div {
+  min-width: 0;
+}
+
+.evidence-grid dt {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.evidence-grid dd {
+  margin: 0.15rem 0 0;
+}
+
+code {
+  overflow-wrap: anywhere;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
+}
+
+.page-actions {
+  margin-top: 1.5rem;
+}
+
+@media (min-width: 48rem) {
+  .evidence-grid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+}

@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block title %}Result · Proteomics CSV Validation{% endblock %}
+
+{% block content %}
+<section
+  class="page-heading"
+  aria-labelledby="result-title"
+>
+  <p class="eyebrow">
+    Durable review evidence
+  </p>
+
+  <h1 id="result-title">
+    Review result
+  </h1>
+</section>
+
+<section
+  class="result-panel"
+  aria-labelledby="execution-title"
+>
+  <h2 id="execution-title">
+    Execution
+  </h2>
+
+  <dl class="evidence-grid">
+    <div>
+      <dt>Status</dt>
+      <dd>{{ result.status }}</dd>
+    </div>
+
+    <div>
+      <dt>Run ID</dt>
+      <dd>
+        <code>{{ result.run_id }}</code>
+      </dd>
+    </div>
+
+    <div>
+      <dt>Configuration ID</dt>
+      <dd>
+        <code>{{ result.configuration_id }}</code>
+      </dd>
+    </div>
+  </dl>
+</section>
+
+{% if result.status == "SUCCEEDED" and result.evidence_available %}
+<section
+  class="result-panel"
+  aria-labelledby="review-summary-title"
+>
+  <h2 id="review-summary-title">
+    {% if result.validation_status == "completed" %}
+    Structural review completed
+    {% elif result.validation_status == "stopped_after_ingestion_finding" %}
+    Validation stopped after ingestion finding
+    {% else %}
+    Structural review result
+    {% endif %}
+  </h2>
+
+  {% if result.validation_status %}
+  <p>
+    <strong>Validation status:</strong>
+    {{ result.validation_status | replace("_", " ") | capitalize }}
+  </p>
+  {% endif %}
+
+  {% if result.validation_status == "stopped_after_ingestion_finding" %}
+  <p class="scope-warning">
+    Execution status SUCCEEDED means the review workflow produced durable
+    result evidence. Validation stopped during CSV ingestion, so later
+    structural checks were not completed.
+  </p>
+  {% endif %}
+
+  <p class="finding-count">
+    <strong>{{ result.total_findings }}</strong>
+    structural finding{% if result.total_findings != 1 %}s{% endif %}
+  </p>
+
+  {% if result.total_findings == 0 %}
+  <p class="scope-warning">
+    No configured structural findings were reported.
+    This does not establish scientific validity,
+    biological correctness, data quality beyond the configured checks,
+    or approval.
+  </p>
+  {% endif %}
+</section>
+
+<section
+  class="result-panel"
+  aria-labelledby="evidence-title"
+>
+  <h2 id="evidence-title">
+    Result evidence
+  </h2>
+
+  <dl class="evidence-grid">
+    <div>
+      <dt>Artifact SHA-256</dt>
+      <dd>
+        <code>{{ result.artifact.sha256 }}</code>
+      </dd>
+    </div>
+
+    <div>
+      <dt>Artifact bytes</dt>
+      <dd>{{ result.artifact.byte_count }}</dd>
+    </div>
+
+    <div>
+      <dt>Schema</dt>
+      <dd>
+        {{ result.artifact.schema_id }}
+        ·
+        {{ result.artifact.schema_version }}
+      </dd>
+    </div>
+  </dl>
+</section>
+
+{% elif result.status == "SUCCEEDED" %}
+<section
+  class="error-summary"
+  role="alert"
+  aria-labelledby="publication-title"
+>
+  <h2 id="publication-title">
+    Result evidence publication unavailable
+  </h2>
+
+  <p>
+    Execution completed, but the durable result evidence cannot currently
+    be verified. No scientific conclusion should be inferred from this state.
+  </p>
+</section>
+
+{% else %}
+<section
+  class="error-summary"
+  role="alert"
+  aria-labelledby="failure-title"
+>
+  <h2 id="failure-title">
+    Review execution did not complete
+  </h2>
+
+  <p>
+    No verified result bundle is available for this run.
+  </p>
+</section>
+{% endif %}
+
+<p class="page-actions">
+  <a href="/review">
+    Run another review
+  </a>
+</p>
+{% endblock %}
