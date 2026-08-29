@@ -14,6 +14,7 @@ from proteomics_csv_validation.domain.run_lifecycle import (
     LedgerOperationError,
     LedgerRecordNotFoundError,
     ReviewDraftRecord,
+    ReviewDraftRevisionConflictError,
     RunConfigurationRecord,
     RunState,
     RunStateConflictError,
@@ -455,8 +456,24 @@ class SQLiteRunRepository:
         draft_id: str,
         canonical_json: str,
         *,
+        expected_revision: int,
         updated_at: str,
     ) -> ReviewDraftRecord:
+        if (
+            isinstance(
+                expected_revision,
+                bool,
+            )
+            or not isinstance(
+                expected_revision,
+                int,
+            )
+            or expected_revision < 1
+        ):
+            raise ValueError(
+                "expected_revision must be a positive integer."
+            )
+
         digest = _text_sha256(
             canonical_json
         )
@@ -470,35 +487,46 @@ class SQLiteRunRepository:
                 with _immediate_transaction(
                     connection
                 ):
-                    current = _select_draft(
-                        connection,
-                        draft_id,
-                    )
-
-                    if current is None:
-                        raise LedgerRecordNotFoundError(
-                            "Review draft does not exist: "
-                            + draft_id
-                        )
-
-                    connection.execute(
+                    cursor = connection.execute(
                         """
                         UPDATE review_draft
                         SET
-                            revision = ?,
+                            revision = revision + 1,
                             configuration_json = ?,
                             configuration_sha256 = ?,
                             updated_at = ?
                         WHERE draft_id = ?
+                          AND revision = ?
                         """,
                         (
-                            current.revision + 1,
                             canonical_json,
                             digest,
                             updated_at,
                             draft_id,
+                            expected_revision,
                         ),
                     )
+
+                    if cursor.rowcount != 1:
+                        current = _select_draft(
+                            connection,
+                            draft_id,
+                        )
+
+                        if current is None:
+                            raise LedgerRecordNotFoundError(
+                                "Review draft does not exist: "
+                                + draft_id
+                            )
+
+                        raise ReviewDraftRevisionConflictError(
+                            "Review draft revision conflict: "
+                            + "expected "
+                            + str(expected_revision)
+                            + ", current "
+                            + str(current.revision)
+                            + "."
+                        )
 
                     record = _select_draft(
                         connection,

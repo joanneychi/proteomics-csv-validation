@@ -20,7 +20,7 @@ from proteomics_csv_validation.infrastructure.sqlite.errors import (
 )
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 MIGRATION_V1_NAME = (
     "initial-ledger-lifecycle-spine"
@@ -31,8 +31,21 @@ MIGRATION_V1_SHA256 = (
     "086796fbe69ac2dae725e4d7f998eaf5"
 )
 
+MIGRATION_V2_NAME = (
+    "publication-artifact-cardinality"
+)
+
+MIGRATION_V2_SHA256 = (
+    "1a7425f410d38db74e8b4267d426fa8d"
+    "4260046a0342bc17857ee76fbf9b24f9"
+)
+
 _MIGRATION_FILE = (
     "001_initial_ledger.sql"
+)
+
+_MIGRATION_V2_FILE = (
+    "002_publication_cardinality.sql"
 )
 
 _STATEMENT_BOUNDARY = (
@@ -40,7 +53,11 @@ _STATEMENT_BOUNDARY = (
 )
 
 _EXPECTED_STATEMENT_COUNT = 42
-_EXPECTED_SCHEMA_OBJECT_COUNT = 42
+_EXPECTED_V2_STATEMENT_COUNT = 2
+_EXPECTED_V1_SCHEMA_OBJECT_COUNT = 42
+_EXPECTED_SCHEMA_OBJECT_COUNT = 44
+
+_PRE_MIGRATION_V2_BACKUP_SUFFIX = ".pre-v2.bak"
 
 _EXPECTED_TABLES = {
     "analysis_run",
@@ -83,8 +100,24 @@ def _utc_now() -> str:
     )
 
 
-def _migration_bytes() -> bytes:
-    """Load and authenticate the frozen version-1 migration."""
+def _migration_bytes(
+    *,
+    version: int = 1,
+) -> bytes:
+    """Load and authenticate one frozen ledger migration."""
+
+    if version == 1:
+        migration_file = _MIGRATION_FILE
+        expected_sha256 = MIGRATION_V1_SHA256
+
+    elif version == 2:
+        migration_file = _MIGRATION_V2_FILE
+        expected_sha256 = MIGRATION_V2_SHA256
+
+    else:
+        raise LedgerSchemaError(
+            "Unknown ledger migration version."
+        )
 
     resource = (
         resources.files(
@@ -94,7 +127,7 @@ def _migration_bytes() -> bytes:
             "migrations"
         )
         .joinpath(
-            _MIGRATION_FILE
+            migration_file
         )
     )
 
@@ -104,7 +137,7 @@ def _migration_bytes() -> bytes:
         raw
     ).hexdigest()
 
-    if observed != MIGRATION_V1_SHA256:
+    if observed != expected_sha256:
         raise LedgerSchemaError(
             "Ledger migration resource identity mismatch."
         )
@@ -131,10 +164,15 @@ def _migration_bytes() -> bytes:
     return raw
 
 
-def _migration_statements() -> tuple[str, ...]:
-    """Return the authenticated migration as individual statements."""
+def _migration_statements(
+    *,
+    version: int = 1,
+) -> tuple[str, ...]:
+    """Return one authenticated migration as individual statements."""
 
-    text = _migration_bytes().decode(
+    text = _migration_bytes(
+        version=version
+    ).decode(
         "utf-8"
     )
 
@@ -146,9 +184,24 @@ def _migration_statements() -> tuple[str, ...]:
         if statement.strip()
     )
 
+    if version == 1:
+        expected_count = (
+            _EXPECTED_STATEMENT_COUNT
+        )
+
+    elif version == 2:
+        expected_count = (
+            _EXPECTED_V2_STATEMENT_COUNT
+        )
+
+    else:
+        raise LedgerSchemaError(
+            "Unknown ledger migration version."
+        )
+
     if len(
         statements
-    ) != _EXPECTED_STATEMENT_COUNT:
+    ) != expected_count:
         raise LedgerSchemaError(
             "Ledger migration statement count mismatch."
         )
@@ -207,7 +260,10 @@ def _schema_definitions(
     )
 
 
-def _expected_schema_definitions() -> tuple[
+def _expected_schema_definitions(
+    *,
+    version: int = SCHEMA_VERSION,
+) -> tuple[
     tuple[
         str,
         str,
@@ -216,7 +272,15 @@ def _expected_schema_definitions() -> tuple[
     ],
     ...,
 ]:
-    """Build the expected schema from the authenticated migration."""
+    """Build the expected schema through one supported version."""
+
+    if version not in (
+        1,
+        2,
+    ):
+        raise LedgerSchemaError(
+            "Unsupported expected ledger schema version."
+        )
 
     connection = _connect(
         Path(":memory:")
@@ -226,10 +290,20 @@ def _expected_schema_definitions() -> tuple[
         with _immediate_transaction(
             connection
         ):
-            for statement in _migration_statements():
+            for statement in _migration_statements(
+                version=1
+            ):
                 connection.execute(
                     statement
                 )
+
+            if version >= 2:
+                for statement in _migration_statements(
+                    version=2
+                ):
+                    connection.execute(
+                        statement
+                    )
 
         return _schema_definitions(
             connection
@@ -263,6 +337,8 @@ def _schema_objects(
 
 def _verify_migration_identity(
     connection: sqlite3.Connection,
+    *,
+    version: int = SCHEMA_VERSION,
 ) -> None:
     try:
         rows = connection.execute(
@@ -283,11 +359,25 @@ def _verify_migration_identity(
 
     expected = [
         (
-            SCHEMA_VERSION,
+            1,
             MIGRATION_V1_NAME,
             MIGRATION_V1_SHA256,
         )
     ]
+
+    if version == 2:
+        expected.append(
+            (
+                2,
+                MIGRATION_V2_NAME,
+                MIGRATION_V2_SHA256,
+            )
+        )
+
+    elif version != 1:
+        raise LedgerSchemaError(
+            "Unsupported migration-history version."
+        )
 
     if rows != expected:
         raise LedgerSchemaError(
@@ -295,25 +385,38 @@ def _verify_migration_identity(
         )
 
 
-def _verify_connection(
+def _verify_connection_version(
     connection: sqlite3.Connection,
+    *,
+    version: int,
 ) -> None:
+    if version not in (
+        1,
+        2,
+    ):
+        raise LedgerSchemaError(
+            "Unsupported ledger schema version."
+        )
+
     if _user_version(
         connection
-    ) != SCHEMA_VERSION:
+    ) != version:
         raise LedgerSchemaError(
             "Ledger user_version does not match the supported schema."
         )
 
     _verify_migration_identity(
-        connection
+        connection,
+        version=version,
     )
 
     observed_schema = _schema_definitions(
         connection
     )
 
-    expected_schema = _expected_schema_definitions()
+    expected_schema = _expected_schema_definitions(
+        version=version
+    )
 
     if observed_schema != expected_schema:
         raise LedgerSchemaError(
@@ -333,9 +436,15 @@ def _verify_connection(
         ) in observed_schema
     )
 
+    expected_object_count = (
+        _EXPECTED_V1_SCHEMA_OBJECT_COUNT
+        if version == 1
+        else _EXPECTED_SCHEMA_OBJECT_COUNT
+    )
+
     if len(
         objects
-    ) != _EXPECTED_SCHEMA_OBJECT_COUNT:
+    ) != expected_object_count:
         raise LedgerSchemaError(
             "Ledger schema object count mismatch."
         )
@@ -385,10 +494,21 @@ def _verify_connection(
         )
 
 
+def _verify_connection(
+    connection: sqlite3.Connection,
+) -> None:
+    _verify_connection_version(
+        connection,
+        version=SCHEMA_VERSION,
+    )
+
+
 def _apply_schema_v1(
     connection: sqlite3.Connection,
 ) -> None:
-    statements = _migration_statements()
+    statements = _migration_statements(
+        version=1
+    )
 
     with _immediate_transaction(
         connection
@@ -409,7 +529,7 @@ def _apply_schema_v1(
             VALUES (?, ?, ?, ?)
             """,
             (
-                SCHEMA_VERSION,
+                1,
                 MIGRATION_V1_NAME,
                 MIGRATION_V1_SHA256,
                 _utc_now(),
@@ -421,10 +541,157 @@ def _apply_schema_v1(
         )
 
 
+def _pre_migration_v2_backup_path(
+    path: Path,
+) -> Path:
+    return Path(
+        str(path)
+        + _PRE_MIGRATION_V2_BACKUP_SUFFIX
+    )
+
+
+def _backup_v1_for_migration(
+    path: Path,
+    source_connection: sqlite3.Connection,
+) -> Path:
+    """Preserve one authenticated version-1 ledger before upgrading."""
+
+    destination = _pre_migration_v2_backup_path(
+        path
+    )
+
+    if destination.exists():
+        existing = _connect(
+            destination
+        )
+
+        try:
+            _ensure_wal(
+                existing
+            )
+
+            _verify_connection_version(
+                existing,
+                version=1,
+            )
+
+        except BaseException as exc:
+            raise LedgerSchemaError(
+                "Existing pre-migration backup is not "
+                "a verified version-1 ledger."
+            ) from exc
+
+        finally:
+            existing.close()
+
+        return destination
+
+    destination.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    destination_connection = _connect(
+        destination
+    )
+
+    try:
+        source_connection.backup(
+            destination_connection
+        )
+
+        _ensure_wal(
+            destination_connection
+        )
+
+        _verify_connection_version(
+            destination_connection,
+            version=1,
+        )
+
+    except BaseException:
+        destination_connection.close()
+
+        _remove_database_files(
+            destination
+        )
+
+        raise
+
+    destination_connection.close()
+
+    return destination
+
+
+def _apply_schema_v2(
+    connection: sqlite3.Connection,
+) -> None:
+    statements = _migration_statements(
+        version=2
+    )
+
+    try:
+        with _immediate_transaction(
+            connection
+        ):
+            for statement in statements:
+                connection.execute(
+                    statement
+                )
+
+            connection.execute(
+                """
+                INSERT INTO schema_migration(
+                    version,
+                    name,
+                    migration_sha256,
+                    applied_at
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    2,
+                    MIGRATION_V2_NAME,
+                    MIGRATION_V2_SHA256,
+                    _utc_now(),
+                ),
+            )
+
+            connection.execute(
+                "PRAGMA user_version = 2"
+            )
+
+            if (
+                connection.execute(
+                    "PRAGMA integrity_check"
+                ).fetchall()
+                != [
+                    ("ok",)
+                ]
+            ):
+                raise LedgerIntegrityError(
+                    "Post-migration integrity_check failed."
+                )
+
+            foreign_key_errors = connection.execute(
+                "PRAGMA foreign_key_check"
+            ).fetchall()
+
+            if foreign_key_errors:
+                raise LedgerIntegrityError(
+                    "Post-migration foreign_key_check failed."
+                )
+
+    except sqlite3.IntegrityError as exc:
+        raise LedgerSchemaError(
+            "Ledger migration to schema version 2 failed."
+        ) from exc
+
+
 def initialize_ledger(
     path: Path,
 ) -> LedgerState:
-    """Create or verify the supported local ledger schema."""
+    """Create, migrate, or verify the supported local ledger schema."""
 
     if not isinstance(
         path,
@@ -468,7 +735,35 @@ def initialize_ledger(
                 connection
             )
 
+            _apply_schema_v2(
+                connection
+            )
+
             created = True
+
+        elif version == 1:
+            _verify_migration_identity(
+                connection,
+                version=1,
+            )
+
+            _ensure_wal(
+                connection
+            )
+
+            _verify_connection_version(
+                connection,
+                version=1,
+            )
+
+            _backup_v1_for_migration(
+                path,
+                connection,
+            )
+
+            _apply_schema_v2(
+                connection
+            )
 
         elif version == SCHEMA_VERSION:
             _verify_migration_identity(
@@ -493,7 +788,7 @@ def initialize_ledger(
 
     return LedgerState(
         schema_version=SCHEMA_VERSION,
-        migration_sha256=MIGRATION_V1_SHA256,
+        migration_sha256=MIGRATION_V2_SHA256,
         created=created,
     )
 
@@ -501,7 +796,7 @@ def initialize_ledger(
 def verify_ledger(
     path: Path,
 ) -> LedgerState:
-    """Verify one existing supported ledger without migrating it."""
+    """Verify one existing current-version ledger without migrating it."""
 
     if not isinstance(
         path,
@@ -530,7 +825,7 @@ def verify_ledger(
 
     return LedgerState(
         schema_version=SCHEMA_VERSION,
-        migration_sha256=MIGRATION_V1_SHA256,
+        migration_sha256=MIGRATION_V2_SHA256,
         created=False,
     )
 

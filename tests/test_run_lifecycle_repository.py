@@ -13,6 +13,7 @@ import proteomics_csv_validation.infrastructure.sqlite.run_repository as reposit
 from proteomics_csv_validation.application.run_lifecycle import (
     LedgerOperationError,
     LedgerRecordNotFoundError,
+    ReviewDraftRevisionConflictError,
     RunLifecycleService,
     RunRepository,
     RunState,
@@ -244,6 +245,7 @@ def test_draft_revision_and_snapshot(
     revised = repository.revise_review_draft(
         "draft",
         second_json,
+        expected_revision=1,
         updated_at=T1,
     )
 
@@ -951,3 +953,97 @@ def test_service_clock_owns_operation_timestamps(
     assert queued.created_at == T2
     assert queued.queued_at == T2
     assert running.started_at == T3
+
+def test_revise_review_draft_rejects_stale_expected_revision(
+    tmp_path: Path,
+) -> None:
+    repository = _repository(
+        tmp_path
+    )
+
+    repository.ensure_workspace(
+        "workspace",
+        created_at=T0,
+    )
+
+    repository.create_review_draft(
+        "draft",
+        "workspace",
+        '{"revision":1}',
+        created_at=T0,
+    )
+
+    first = repository.revise_review_draft(
+        "draft",
+        '{"revision":2}',
+        expected_revision=1,
+        updated_at=T1,
+    )
+
+    assert first.revision == 2
+
+    with pytest.raises(
+        ReviewDraftRevisionConflictError,
+        match="expected 1, current 2",
+    ):
+        repository.revise_review_draft(
+            "draft",
+            '{"stale":true}',
+            expected_revision=1,
+            updated_at=T2,
+        )
+
+    current = repository.snapshot_configuration(
+        "configuration",
+        "workspace",
+        '{"revision":2}',
+        created_at=T3,
+        source_draft_id="draft",
+    )
+
+    assert (
+        current.source_draft_revision
+        == 2
+    )
+
+
+def test_service_forwards_expected_revision_and_clock(
+    tmp_path: Path,
+) -> None:
+    repository = _repository(
+        tmp_path
+    )
+
+    times = iter(
+        [
+            T0,
+            T1,
+            T2,
+        ]
+    )
+
+    service = RunLifecycleService(
+        repository=repository,
+        clock=lambda: next(
+            times
+        ),
+    )
+
+    service.ensure_workspace(
+        "workspace"
+    )
+
+    service.create_review_draft(
+        "draft",
+        "workspace",
+        '{"revision":1}',
+    )
+
+    revised = service.revise_review_draft(
+        "draft",
+        '{"revision":2}',
+        expected_revision=1,
+    )
+
+    assert revised.revision == 2
+    assert revised.updated_at == T2

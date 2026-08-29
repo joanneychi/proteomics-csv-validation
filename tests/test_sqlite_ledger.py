@@ -10,6 +10,8 @@ import sqlite3
 
 import pytest
 
+import proteomics_csv_validation.infrastructure.sqlite.ledger as ledger_module
+
 from proteomics_csv_validation.infrastructure.sqlite import (
     MIGRATION_V1_SHA256,
     SCHEMA_VERSION,
@@ -133,6 +135,260 @@ def _succeed(
     )
 
 
+def _initialize_version_1_ledger(
+    path: Path,
+) -> None:
+    connection = _connect(
+        path
+    )
+
+    try:
+        ledger_module._ensure_wal(
+            connection
+        )
+
+        with _immediate_transaction(
+            connection
+        ):
+            for statement in ledger_module._migration_statements(
+                version=1
+            ):
+                connection.execute(
+                    statement
+                )
+
+            connection.execute(
+                """
+                INSERT INTO schema_migration(
+                    version,
+                    name,
+                    migration_sha256,
+                    applied_at
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    1,
+                    ledger_module.MIGRATION_V1_NAME,
+                    MIGRATION_V1_SHA256,
+                    UTC,
+                ),
+            )
+
+            connection.execute(
+                "PRAGMA user_version = 1"
+            )
+
+    finally:
+        connection.close()
+
+
+def _seed_version_1_publication_duplicates(
+    path: Path,
+    scenario: str,
+) -> None:
+    connection = _connect(
+        path
+    )
+
+    try:
+        with _immediate_transaction(
+            connection
+        ):
+            connection.execute(
+                """
+                INSERT INTO workspace(
+                    workspace_id,
+                    created_at
+                )
+                VALUES (?, ?)
+                """,
+                (
+                    "workspace",
+                    UTC,
+                ),
+            )
+
+            connection.execute(
+                """
+                INSERT INTO run_configuration(
+                    configuration_id,
+                    workspace_id,
+                    canonical_json,
+                    sha256,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    "configuration",
+                    "workspace",
+                    "{}",
+                    sha256(
+                        b"{}"
+                    ).hexdigest(),
+                    UTC,
+                ),
+            )
+
+            connection.execute(
+                """
+                INSERT INTO analysis_run(
+                    run_id,
+                    workspace_id,
+                    configuration_id,
+                    status,
+                    created_at,
+                    queued_at
+                )
+                VALUES (?, ?, ?, 'QUEUED', ?, ?)
+                """,
+                (
+                    "run",
+                    "workspace",
+                    "configuration",
+                    UTC,
+                    UTC,
+                ),
+            )
+
+            connection.execute(
+                """
+                UPDATE analysis_run
+                SET
+                    status = 'RUNNING',
+                    started_at = ?
+                WHERE run_id = ?
+                """,
+                (
+                    UTC,
+                    "run",
+                ),
+            )
+
+            connection.execute(
+                """
+                UPDATE analysis_run
+                SET
+                    status = 'SUCCEEDED',
+                    finished_at = ?
+                WHERE run_id = ?
+                """,
+                (
+                    UTC,
+                    "run",
+                ),
+            )
+
+            if scenario == "result":
+                for number in (
+                    1,
+                    2,
+                ):
+                    connection.execute(
+                        """
+                        INSERT INTO run_artifact(
+                            artifact_id,
+                            run_id,
+                            export_attempt_id,
+                            kind,
+                            relative_path,
+                            sha256,
+                            byte_count,
+                            created_at
+                        )
+                        VALUES (?, ?, NULL, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            "result-" + str(number),
+                            "run",
+                            "RESULT_BUNDLE",
+                            (
+                                "results/result-"
+                                + str(number)
+                                + ".json"
+                            ),
+                            str(number) * 64,
+                            number,
+                            UTC,
+                        ),
+                    )
+
+            elif scenario == "export":
+                connection.execute(
+                    """
+                    INSERT INTO export_attempt(
+                        export_attempt_id,
+                        run_id,
+                        artifact_kind,
+                        target_relative_path,
+                        status,
+                        started_at
+                    )
+                    VALUES (?, ?, ?, ?, 'STARTED', ?)
+                    """,
+                    (
+                        "export",
+                        "run",
+                        "REVIEW_REPORT",
+                        "exports/review.md",
+                        UTC,
+                    ),
+                )
+
+                connection.execute(
+                    """
+                    UPDATE export_attempt
+                    SET
+                        status = 'SUCCEEDED',
+                        finished_at = ?
+                    WHERE export_attempt_id = ?
+                    """,
+                    (
+                        UTC,
+                        "export",
+                    ),
+                )
+
+                for number in (
+                    1,
+                    2,
+                ):
+                    connection.execute(
+                        """
+                        INSERT INTO run_artifact(
+                            artifact_id,
+                            run_id,
+                            export_attempt_id,
+                            kind,
+                            relative_path,
+                            sha256,
+                            byte_count,
+                            created_at
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            "report-" + str(number),
+                            "run",
+                            "export",
+                            "REVIEW_REPORT",
+                            "exports/review.md",
+                            str(number) * 64,
+                            number,
+                            UTC,
+                        ),
+                    )
+
+            else:
+                raise AssertionError(
+                    scenario
+                )
+
+    finally:
+        connection.close()
+
+
 def test_migration_resource_matches_frozen_schema() -> None:
     """The packaged SQL bytes remain the frozen hardened schema."""
 
@@ -202,7 +458,7 @@ def test_connection_policy_uses_native_autocommit(
 def test_initialize_fresh_ledger(
     tmp_path: Path,
 ) -> None:
-    """Fresh initialization installs and verifies schema version 1."""
+    """Fresh initialization installs and verifies schema version 2."""
 
     path = tmp_path / "workspace.sqlite"
 
@@ -212,13 +468,17 @@ def test_initialize_fresh_ledger(
 
     assert state.created is True
     assert state.schema_version == SCHEMA_VERSION
-    assert state.migration_sha256 == MIGRATION_V1_SHA256
+    assert (
+        state.migration_sha256
+        == ledger_module.MIGRATION_V2_SHA256
+    )
 
     verified = verify_ledger(
         path
     )
 
     assert verified.created is False
+    assert verified.schema_version == 2
 
     connection = _connect(
         path
@@ -242,7 +502,7 @@ def test_initialize_fresh_ledger(
 
         assert len(
             objects
-        ) == 42
+        ) == 44
 
         assert tables == {
             "analysis_run",
@@ -257,7 +517,18 @@ def test_initialize_fresh_ledger(
 
         assert connection.execute(
             "PRAGMA user_version"
-        ).fetchone()[0] == 1
+        ).fetchone()[0] == 2
+
+        assert connection.execute(
+            """
+            SELECT version
+            FROM schema_migration
+            ORDER BY version
+            """
+        ).fetchall() == [
+            (1,),
+            (2,),
+        ]
 
         assert connection.execute(
             "PRAGMA journal_mode"
@@ -270,7 +541,7 @@ def test_initialize_fresh_ledger(
 def test_initialize_is_idempotent(
     tmp_path: Path,
 ) -> None:
-    """Reopening schema version 1 verifies rather than remigrates."""
+    """Reopening schema version 2 verifies rather than remigrates."""
 
     path = tmp_path / "workspace.sqlite"
 
@@ -295,7 +566,11 @@ def test_initialize_is_idempotent(
             SELECT COUNT(*)
             FROM schema_migration
             """
-        ).fetchone()[0] == 1
+        ).fetchone()[0] == 2
+
+        assert connection.execute(
+            "PRAGMA user_version"
+        ).fetchone()[0] == 2
 
     finally:
         connection.close()
@@ -332,7 +607,7 @@ def test_initialize_rejects_unversioned_nonempty_database(
 def test_initialize_rejects_newer_schema(
     tmp_path: Path,
 ) -> None:
-    """A database newer than the implemented migration is refused."""
+    """A database newer than the implemented migrations is refused."""
 
     path = tmp_path / "newer.sqlite"
 
@@ -342,7 +617,7 @@ def test_initialize_rejects_newer_schema(
 
     try:
         connection.execute(
-            "PRAGMA user_version = 2"
+            "PRAGMA user_version = 3"
         )
         connection.commit()
 
@@ -405,7 +680,7 @@ def test_immediate_transaction_rolls_back(
 def test_backup_preserves_verified_ledger(
     tmp_path: Path,
 ) -> None:
-    """SQLite backup preserves committed ledger state and schema identity."""
+    """SQLite backup preserves committed version-2 ledger state."""
 
     source = tmp_path / "source.sqlite"
     destination = tmp_path / "backup.sqlite"
@@ -435,8 +710,11 @@ def test_backup_preserves_verified_ledger(
         destination,
     )
 
-    assert state.schema_version == 1
-    assert state.migration_sha256 == MIGRATION_V1_SHA256
+    assert state.schema_version == 2
+    assert (
+        state.migration_sha256
+        == ledger_module.MIGRATION_V2_SHA256
+    )
 
     backup_connection = _connect(
         destination
@@ -450,6 +728,10 @@ def test_backup_preserves_verified_ledger(
             WHERE workspace_id = 'workspace-1'
             """
         ).fetchone()[0] == 1
+
+        assert backup_connection.execute(
+            "PRAGMA user_version"
+        ).fetchone()[0] == 2
 
         assert backup_connection.execute(
             "PRAGMA integrity_check"
@@ -996,8 +1278,8 @@ def test_sha_and_migration_contiguity_guards(
                 VALUES (?, ?, ?, ?)
                 """,
                 (
-                    3,
-                    "skip-version-2",
+                    4,
+                    "skip-version-3",
                     "a" * 64,
                     UTC,
                 ),
@@ -1212,7 +1494,7 @@ def test_verify_rejects_same_name_schema_definition_tamper(
             FROM sqlite_schema
             WHERE name NOT LIKE 'sqlite_%'
             """
-        ).fetchone()[0] == 42
+        ).fetchone()[0] == 44
 
         assert connection.execute(
             "PRAGMA integrity_check"
@@ -1345,3 +1627,195 @@ def test_infrastructure_import_boundaries() -> None:
                         path,
                         alias.name,
                     )
+
+def test_migration_v2_resource_matches_frozen_cardinality_schema() -> None:
+    raw = (
+        resources.files(
+            "proteomics_csv_validation.infrastructure.sqlite"
+        )
+        .joinpath(
+            "migrations"
+        )
+        .joinpath(
+            "002_publication_cardinality.sql"
+        )
+        .read_bytes()
+    )
+
+    assert sha256(
+        raw
+    ).hexdigest() == ledger_module.MIGRATION_V2_SHA256
+
+    assert ledger_module.MIGRATION_V2_SHA256 == "1a7425f410d38db74e8b4267d426fa8d4260046a0342bc17857ee76fbf9b24f9"
+
+    assert len(
+        ledger_module._migration_statements(
+            version=2
+        )
+    ) == 2
+
+
+def test_initialize_migrates_valid_v1_with_verified_backup(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "workspace.sqlite"
+
+    _initialize_version_1_ledger(
+        path
+    )
+
+    state = initialize_ledger(
+        path
+    )
+
+    assert state.created is False
+    assert state.schema_version == 2
+    assert (
+        state.migration_sha256
+        == ledger_module.MIGRATION_V2_SHA256
+    )
+
+    backup = Path(
+        str(path)
+        + ".pre-v2.bak"
+    )
+
+    assert backup.is_file()
+
+    connection = _connect(
+        path
+    )
+
+    try:
+        assert connection.execute(
+            "PRAGMA user_version"
+        ).fetchone()[0] == 2
+
+        assert connection.execute(
+            """
+            SELECT version
+            FROM schema_migration
+            ORDER BY version
+            """
+        ).fetchall() == [
+            (1,),
+            (2,),
+        ]
+
+        indexes = {
+            row[0]
+            for row in connection.execute(
+                """
+                SELECT name
+                FROM sqlite_schema
+                WHERE type = 'index'
+                """
+            ).fetchall()
+        }
+
+        assert {
+            "run_artifact_one_result_bundle_per_run",
+            "run_artifact_one_per_export_attempt",
+        } <= indexes
+
+    finally:
+        connection.close()
+
+    backup_connection = _connect(
+        backup
+    )
+
+    try:
+        ledger_module._verify_connection_version(
+            backup_connection,
+            version=1,
+        )
+
+        assert backup_connection.execute(
+            "PRAGMA user_version"
+        ).fetchone()[0] == 1
+
+    finally:
+        backup_connection.close()
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    [
+        "result",
+        "export",
+    ],
+)
+def test_v1_cardinality_conflict_rolls_back_migration_v2(
+    tmp_path: Path,
+    scenario: str,
+) -> None:
+    path = tmp_path / (
+        scenario
+        + ".sqlite"
+    )
+
+    _initialize_version_1_ledger(
+        path
+    )
+
+    _seed_version_1_publication_duplicates(
+        path,
+        scenario,
+    )
+
+    with pytest.raises(
+        LedgerSchemaError,
+        match="schema version 2",
+    ):
+        initialize_ledger(
+            path
+        )
+
+    connection = _connect(
+        path
+    )
+
+    try:
+        assert connection.execute(
+            "PRAGMA user_version"
+        ).fetchone()[0] == 1
+
+        assert connection.execute(
+            """
+            SELECT version
+            FROM schema_migration
+            ORDER BY version
+            """
+        ).fetchall() == [
+            (1,),
+        ]
+
+        assert connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM sqlite_schema
+            WHERE type = 'index'
+              AND name IN (
+                  'run_artifact_one_result_bundle_per_run',
+                  'run_artifact_one_per_export_attempt'
+              )
+            """
+        ).fetchone()[0] == 0
+
+        assert connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM run_artifact
+            """
+        ).fetchone()[0] == 2
+
+    finally:
+        connection.close()
+
+    backup = Path(
+        str(path)
+        + ".pre-v2.bak"
+    )
+
+    assert backup.is_file()

@@ -11,6 +11,7 @@ from proteomics_csv_validation.domain.run_lifecycle import (
     LedgerOperationError,
     LedgerRecordNotFoundError,
     ReviewDraftRecord,
+    ReviewDraftRevisionConflictError,
     RunConfigurationRecord,
     RunState,
     RunStateConflictError,
@@ -24,6 +25,7 @@ __all__ = [
     "LedgerOperationError",
     "LedgerRecordNotFoundError",
     "ReviewDraftRecord",
+    "ReviewDraftRevisionConflictError",
     "RunConfigurationRecord",
     "RunLifecycleService",
     "RunRepository",
@@ -60,9 +62,10 @@ class RunRepository(Protocol):
         draft_id: str,
         canonical_json: str,
         *,
+        expected_revision: int,
         updated_at: str,
     ) -> ReviewDraftRecord:
-        """Advance a draft by exactly one revision."""
+        """Advance a draft when the expected revision is current."""
 
     def snapshot_configuration(
         self,
@@ -169,10 +172,13 @@ class RunLifecycleService:
         self,
         draft_id: str,
         canonical_json: str,
+        *,
+        expected_revision: int,
     ) -> ReviewDraftRecord:
         return self.repository.revise_review_draft(
             draft_id,
             canonical_json,
+            expected_revision=expected_revision,
             updated_at=self.clock(),
         )
 

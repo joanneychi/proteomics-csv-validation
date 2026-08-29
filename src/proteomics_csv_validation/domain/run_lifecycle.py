@@ -35,6 +35,10 @@ class LedgerRecordNotFoundError(LedgerOperationError):
     """Raised when a requested lifecycle record does not exist."""
 
 
+class ReviewDraftRevisionConflictError(LedgerOperationError):
+    """Raised when a review-draft revision token is stale."""
+
+
 class RunStateConflictError(LedgerOperationError):
     """Raised when an operation conflicts with persisted run state."""
 
