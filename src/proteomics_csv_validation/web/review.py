@@ -32,6 +32,15 @@ from proteomics_csv_validation.application.browser_review import (
     ReviewWorkflowPort,
     ReviewHistoryUnavailable,
 )
+
+from proteomics_csv_validation.application.browser_review import (
+    ReviewComparisonIneligible,
+    ReviewComparisonInvalid,
+    ReviewComparisonUnavailable,
+    ReviewExportIneligible,
+    ReviewExportUnavailable,
+    ReviewResultNotFound,
+)
 from proteomics_csv_validation.web.csrf import (
     issue_csrf_token,
     request_has_trusted_origin,
@@ -1144,4 +1153,173 @@ def install_review_routes(
             name="result.html",
             context=context,
             status_code=status_code,
+        )
+
+    @app.get(
+        "/compare",
+        include_in_schema=False,
+    )
+    async def compare_runs(
+        request: Request,
+        left: str | None = None,
+        right: str | None = None,
+    ) -> Response:
+        left_value = (
+            left
+            if left is not None
+            else ""
+        )
+
+        right_value = (
+            right
+            if right is not None
+            else ""
+        )
+
+        for value in (
+            left_value,
+            right_value,
+        ):
+            if (
+                value
+                and _RUN_ID.fullmatch(
+                    value
+                )
+                is None
+            ):
+                return PlainTextResponse(
+                    "Comparison run ID was not accepted.",
+                    status_code=400,
+                )
+
+        comparison = None
+
+        if (
+            left_value
+            and right_value
+        ):
+            if (
+                left_value
+                == right_value
+            ):
+                return PlainTextResponse(
+                    "Comparison requires two distinct runs.",
+                    status_code=400,
+                )
+
+            try:
+                comparison = (
+                    workflow.compare(
+                        left_value,
+                        right_value,
+                    )
+                )
+
+            except ReviewComparisonInvalid:
+                return PlainTextResponse(
+                    "Comparison request was not accepted.",
+                    status_code=400,
+                )
+
+            except ReviewResultNotFound:
+                return PlainTextResponse(
+                    "Comparison run not found.",
+                    status_code=404,
+                )
+
+            except ReviewComparisonIneligible:
+                return PlainTextResponse(
+                    "Comparison requires completed successful reviews.",
+                    status_code=409,
+                )
+
+            except ReviewComparisonUnavailable:
+                return PlainTextResponse(
+                    "Comparison evidence is unavailable.",
+                    status_code=503,
+                )
+
+        templates = (
+            request.app.state.templates
+        )
+
+        return templates.TemplateResponse(
+            request,
+            "compare.html",
+            {
+                "left_value": (
+                    left_value
+                ),
+                "right_value": (
+                    right_value
+                ),
+                "comparison": (
+                    comparison
+                ),
+            },
+            headers={
+                "Cache-Control": (
+                    "no-store"
+                )
+            },
+        )
+
+    @app.get(
+        "/results/{run_id}/export",
+        include_in_schema=False,
+    )
+    async def export_result_bundle(
+        run_id: str,
+    ) -> Response:
+        if (
+            _RUN_ID.fullmatch(
+                run_id
+            )
+            is None
+        ):
+            return PlainTextResponse(
+                "Result not found.",
+                status_code=404,
+            )
+
+        try:
+            exported = (
+                workflow.export_result(
+                    run_id
+                )
+            )
+
+        except ReviewResultNotFound:
+            return PlainTextResponse(
+                "Result not found.",
+                status_code=404,
+            )
+
+        except ReviewExportIneligible:
+            return PlainTextResponse(
+                "Result is not eligible for export.",
+                status_code=409,
+            )
+
+        except ReviewExportUnavailable:
+            return PlainTextResponse(
+                "Result export evidence is unavailable.",
+                status_code=503,
+            )
+
+        return Response(
+            content=exported.payload,
+            media_type=(
+                exported.media_type
+            ),
+            headers={
+                "Cache-Control": (
+                    "no-store"
+                ),
+                "Content-Disposition": (
+                    'attachment; filename="'
+                    + exported.filename
+                    + '"'
+                ),
+            },
         )

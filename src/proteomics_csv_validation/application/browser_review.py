@@ -1,6 +1,7 @@
 """Application-facing workflow facade for one browser Review submission."""
 
 from __future__ import annotations
+from collections import Counter
 
 from dataclasses import dataclass
 import hashlib
@@ -1578,6 +1579,221 @@ class ReviewHistoryUnavailable(
 ):
     """Raised when durable History evidence cannot be trusted."""
 
+
+@dataclass(frozen=True)
+class ResultCountComparisonView:
+    """One deterministic left/right summary-count comparison."""
+
+    label: str
+    left_count: int
+    right_count: int
+    delta: int
+
+
+@dataclass(frozen=True)
+class ReviewComparisonView:
+    """Presentation-safe comparison of two reconciled review results."""
+
+    left: ReviewResultView
+    right: ReviewResultView
+    same_source_bytes: bool
+    same_profile_version: bool
+    same_mapping_mode: bool
+    same_mapping_source: bool
+    same_application_version: bool
+    same_descriptor_schema_version: bool
+    same_profile_id: bool
+    same_validation_profile_version: bool
+    same_configured_rules: bool
+    same_column_mapping: bool
+    total_findings: ResultCountComparisonView
+    category_counts: tuple[ResultCountComparisonView, ...]
+    code_counts: tuple[ResultCountComparisonView, ...]
+    severity_counts: tuple[ResultCountComparisonView, ...]
+    scope_counts: tuple[ResultCountComparisonView, ...]
+    common_findings: tuple[ResultFindingView, ...]
+    left_only_findings: tuple[ResultFindingView, ...]
+    right_only_findings: tuple[ResultFindingView, ...]
+
+
+@dataclass(frozen=True)
+class ReviewResultExportView:
+    """Exact verified Result Bundle bytes with safe download metadata."""
+
+    run_id: str
+    filename: str
+    media_type: str
+    payload: bytes
+    sha256: str
+    byte_count: int
+
+
+class ReviewComparisonInvalid(ValueError):
+    """Raised when a comparison request is structurally invalid."""
+
+
+class ReviewComparisonIneligible(RuntimeError):
+    """Raised when a run is not an eligible completed comparison result."""
+
+
+class ReviewComparisonUnavailable(RuntimeError):
+    """Raised when trustworthy comparison evidence is unavailable."""
+
+
+class ReviewExportIneligible(RuntimeError):
+    """Raised when a run is not eligible for Result Bundle export."""
+
+
+class ReviewExportUnavailable(RuntimeError):
+    """Raised when trustworthy export evidence is unavailable."""
+
+
+def _same_file_bytes(
+    left: ResultFileEvidenceView | None,
+    right: ResultFileEvidenceView | None,
+) -> bool:
+    if left is None or right is None:
+        return left is right
+
+    return (
+        left.sha256 == right.sha256
+        and left.byte_count == right.byte_count
+    )
+
+
+def _compare_count_views(
+    left: tuple[ResultCountView, ...],
+    right: tuple[ResultCountView, ...],
+) -> tuple[ResultCountComparisonView, ...]:
+    left_map = {
+        item.label: item.count
+        for item in left
+    }
+
+    right_map = {
+        item.label: item.count
+        for item in right
+    }
+
+    if (
+        len(left_map) != len(left)
+        or len(right_map) != len(right)
+    ):
+        raise ReviewComparisonUnavailable(
+            "Summary count labels are not unique."
+        )
+
+    return tuple(
+        ResultCountComparisonView(
+            label=label,
+            left_count=left_map.get(
+                label,
+                0,
+            ),
+            right_count=right_map.get(
+                label,
+                0,
+            ),
+            delta=(
+                right_map.get(
+                    label,
+                    0,
+                )
+                - left_map.get(
+                    label,
+                    0,
+                )
+            ),
+        )
+        for label in sorted(
+            set(left_map)
+            | set(right_map)
+        )
+    )
+
+
+def _take_findings(
+    findings: tuple[ResultFindingView, ...],
+    counts: Counter[ResultFindingView],
+) -> tuple[ResultFindingView, ...]:
+    remaining = counts.copy()
+    selected: list[
+        ResultFindingView
+    ] = []
+
+    for finding in findings:
+        if remaining[
+            finding
+        ] <= 0:
+            continue
+
+        selected.append(
+            finding
+        )
+
+        remaining[
+            finding
+        ] -= 1
+
+    if any(
+        remaining.values()
+    ):
+        raise ReviewComparisonUnavailable(
+            "Finding multiplicity could not be reconstructed."
+        )
+
+    return tuple(
+        selected
+    )
+
+
+def _exact_finding_multiset(
+    left: tuple[ResultFindingView, ...],
+    right: tuple[ResultFindingView, ...],
+) -> tuple[
+    tuple[ResultFindingView, ...],
+    tuple[ResultFindingView, ...],
+    tuple[ResultFindingView, ...],
+]:
+    left_counts = Counter(
+        left
+    )
+
+    right_counts = Counter(
+        right
+    )
+
+    common_counts = (
+        left_counts
+        & right_counts
+    )
+
+    left_only_counts = (
+        left_counts
+        - right_counts
+    )
+
+    right_only_counts = (
+        right_counts
+        - left_counts
+    )
+
+    return (
+        _take_findings(
+            left,
+            common_counts,
+        ),
+        _take_findings(
+            left,
+            left_only_counts,
+        ),
+        _take_findings(
+            right,
+            right_only_counts,
+        ),
+    )
+
+
 class ReviewWorkflowPort(
     Protocol
 ):
@@ -1607,6 +1823,20 @@ class ReviewWorkflowPort(
         run_id: str,
     ) -> ReviewResultView:
         ...
+
+    def compare(
+        self,
+        left_run_id: str,
+        right_run_id: str,
+    ) -> ReviewComparisonView:
+        ...
+
+    def export_result(
+        self,
+        run_id: str,
+    ) -> ReviewResultExportView:
+        ...
+
 
 
 class ReviewWorkflowService:
@@ -2557,5 +2787,339 @@ class ReviewWorkflowService:
             ),
             validation=(
                 validation_view
+            ),
+        )
+
+    def compare(
+        self,
+        left_run_id: str,
+        right_run_id: str,
+    ) -> ReviewComparisonView:
+        """Compare exact evidence from two reconciled completed reviews."""
+
+        if left_run_id == right_run_id:
+            raise ReviewComparisonInvalid(
+                "Comparison requires two distinct run IDs."
+            )
+
+        try:
+            left = self.result(
+                left_run_id
+            )
+
+            right = self.result(
+                right_run_id
+            )
+
+        except ReviewResultNotFound:
+            raise
+
+        except RuntimeError as exc:
+            raise ReviewComparisonUnavailable(
+                "Comparison evidence could not be reconciled."
+            ) from exc
+
+        if (
+            left.status
+            != RunState.SUCCEEDED.value
+            or right.status
+            != RunState.SUCCEEDED.value
+        ):
+            raise ReviewComparisonIneligible(
+                "Comparison requires completed successful reviews."
+            )
+
+        if (
+            not left.evidence_available
+            or not right.evidence_available
+            or left.configuration is None
+            or right.configuration is None
+            or left.validation is None
+            or right.validation is None
+        ):
+            raise ReviewComparisonUnavailable(
+                "Trustworthy comparison evidence is unavailable."
+            )
+
+        left_configuration = (
+            left.configuration
+        )
+
+        right_configuration = (
+            right.configuration
+        )
+
+        left_validation = (
+            left.validation
+        )
+
+        right_validation = (
+            right.validation
+        )
+
+        (
+            common_findings,
+            left_only_findings,
+            right_only_findings,
+        ) = _exact_finding_multiset(
+            left_validation.findings,
+            right_validation.findings,
+        )
+
+        left_total = (
+            left_validation
+            .summary
+            .total_findings
+        )
+
+        right_total = (
+            right_validation
+            .summary
+            .total_findings
+        )
+
+        return ReviewComparisonView(
+            left=left,
+            right=right,
+            same_source_bytes=(
+                _same_file_bytes(
+                    left_configuration.source,
+                    right_configuration.source,
+                )
+            ),
+            same_profile_version=(
+                left_configuration.profile_version
+                == right_configuration.profile_version
+            ),
+            same_mapping_mode=(
+                left_configuration.mapping_mode
+                == right_configuration.mapping_mode
+            ),
+            same_mapping_source=(
+                _same_file_bytes(
+                    left_configuration.column_mapping_source,
+                    right_configuration.column_mapping_source,
+                )
+            ),
+            same_application_version=(
+                left_validation.application_version
+                == right_validation.application_version
+            ),
+            same_descriptor_schema_version=(
+                left_validation.descriptor_schema_version
+                == right_validation.descriptor_schema_version
+            ),
+            same_profile_id=(
+                left_validation.profile_id
+                == right_validation.profile_id
+            ),
+            same_validation_profile_version=(
+                left_validation.profile_version
+                == right_validation.profile_version
+            ),
+            same_configured_rules=(
+                left_validation.configured_rules
+                == right_validation.configured_rules
+            ),
+            same_column_mapping=(
+                left_validation.column_mapping
+                == right_validation.column_mapping
+            ),
+            total_findings=(
+                ResultCountComparisonView(
+                    label="total_findings",
+                    left_count=left_total,
+                    right_count=right_total,
+                    delta=(
+                        right_total
+                        - left_total
+                    ),
+                )
+            ),
+            category_counts=(
+                _compare_count_views(
+                    left_validation
+                    .summary
+                    .category_counts,
+                    right_validation
+                    .summary
+                    .category_counts,
+                )
+            ),
+            code_counts=(
+                _compare_count_views(
+                    left_validation
+                    .summary
+                    .code_counts,
+                    right_validation
+                    .summary
+                    .code_counts,
+                )
+            ),
+            severity_counts=(
+                _compare_count_views(
+                    left_validation
+                    .summary
+                    .severity_counts,
+                    right_validation
+                    .summary
+                    .severity_counts,
+                )
+            ),
+            scope_counts=(
+                _compare_count_views(
+                    left_validation
+                    .summary
+                    .scope_counts,
+                    right_validation
+                    .summary
+                    .scope_counts,
+                )
+            ),
+            common_findings=(
+                common_findings
+            ),
+            left_only_findings=(
+                left_only_findings
+            ),
+            right_only_findings=(
+                right_only_findings
+            ),
+        )
+
+    def export_result(
+        self,
+        run_id: str,
+    ) -> ReviewResultExportView:
+        """Return exact verified Result Bundle bytes without republishing them."""
+
+        try:
+            result = self.result(
+                run_id
+            )
+
+        except ReviewResultNotFound:
+            raise
+
+        except RuntimeError as exc:
+            raise ReviewExportUnavailable(
+                "Export evidence could not be reconciled."
+            ) from exc
+
+        if (
+            result.status
+            != RunState.SUCCEEDED.value
+        ):
+            raise ReviewExportIneligible(
+                "Only completed successful reviews can be exported."
+            )
+
+        if (
+            not result.evidence_available
+            or result.configuration is None
+            or result.validation is None
+            or result.artifact_sha256 is None
+            or result.artifact_byte_count is None
+        ):
+            raise ReviewExportUnavailable(
+                "Trustworthy export evidence is unavailable."
+            )
+
+        try:
+            artifacts = tuple(
+                artifact
+                for artifact
+                in self._publication.list_artifacts(
+                    result.run_id
+                )
+                if (
+                    artifact.kind
+                    == RESULT_BUNDLE_ARTIFACT_KIND
+                )
+            )
+
+        except RuntimeError as exc:
+            raise ReviewExportUnavailable(
+                "Export artifact evidence is unavailable."
+            ) from exc
+
+        if len(
+            artifacts
+        ) != 1:
+            raise ReviewExportUnavailable(
+                "Exactly one Result Bundle is required for export."
+            )
+
+        artifact = artifacts[
+            0
+        ]
+
+        if (
+            artifact.export_attempt_id
+            is not None
+            or artifact.sha256
+            != result.artifact_sha256
+            or artifact.byte_count
+            != result.artifact_byte_count
+            or artifact.schema_id
+            != result.artifact_schema_id
+            or artifact.schema_version
+            != result.artifact_schema_version
+        ):
+            raise ReviewExportUnavailable(
+                "Export artifact identity does not match the reconciled result."
+            )
+
+        try:
+            payload = (
+                self._result_reader
+                .read_verified(
+                    artifact.relative_path,
+                    expected_sha256=(
+                        artifact.sha256
+                    ),
+                    expected_byte_count=(
+                        artifact.byte_count
+                    ),
+                )
+            )
+
+        except (
+            ResultStoreError,
+            OSError,
+            ValueError,
+        ) as exc:
+            raise ReviewExportUnavailable(
+                "Export artifact bytes could not be verified."
+            ) from exc
+
+        if (
+            len(
+                payload
+            )
+            != artifact.byte_count
+            or hashlib.sha256(
+                payload
+            ).hexdigest()
+            != artifact.sha256
+        ):
+            raise ReviewExportUnavailable(
+                "Export artifact byte identity is inconsistent."
+            )
+
+        return ReviewResultExportView(
+            run_id=result.run_id,
+            filename=(
+                "result-bundle-"
+                + result.run_id
+                + ".json"
+            ),
+            media_type=(
+                "application/json"
+            ),
+            payload=payload,
+            sha256=artifact.sha256,
+            byte_count=(
+                artifact.byte_count
             ),
         )

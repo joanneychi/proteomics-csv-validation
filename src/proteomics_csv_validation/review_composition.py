@@ -179,6 +179,25 @@ class _LazyReviewWorkflow:
             run_id
         )
 
+    def compare(
+        self,
+        left_run_id: str,
+        right_run_id: str,
+    ):
+        return self._get_service().compare(
+            left_run_id,
+            right_run_id,
+        )
+
+    def export_result(
+        self,
+        run_id: str,
+    ):
+        return self._get_service().export_result(
+            run_id
+        )
+
+
 
 def build_review_workflow(
     data_root: Path,

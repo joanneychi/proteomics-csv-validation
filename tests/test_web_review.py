@@ -2997,3 +2997,1364 @@ def test_history_http_503_withholds_partial_rows_on_integrity_failure(
                 "cache-control"
             ]
         )
+
+
+class _CeCsrfParser:
+    def __init__(self) -> None:
+        from html.parser import HTMLParser
+
+        class _Parser(HTMLParser):
+            def __init__(
+                inner_self,
+            ) -> None:
+                super().__init__()
+                inner_self.values: list[
+                    str
+                ] = []
+
+            def handle_starttag(
+                inner_self,
+                tag: str,
+                attrs,
+            ) -> None:
+                if tag.casefold() != "input":
+                    return
+
+                values = dict(
+                    attrs
+                )
+
+                if (
+                    values.get(
+                        "name"
+                    )
+                    == "csrf_token"
+                    and values.get(
+                        "value"
+                    )
+                ):
+                    inner_self.values.append(
+                        values[
+                            "value"
+                        ]
+                    )
+
+        self.parser = _Parser()
+
+    def feed(
+        self,
+        text: str,
+    ) -> tuple[str, ...]:
+        self.parser.feed(
+            text
+        )
+
+        return tuple(
+            self.parser.values
+        )
+
+
+def _ce_outer(
+    tmp_path,
+):
+    from proteomics_csv_validation.web.composition import (
+        create_app,
+    )
+
+    return create_app(
+        data_root=(
+            tmp_path
+            / "state"
+        ),
+        csrf_secret=(
+            b"0123456789abcdef"
+            b"0123456789abcdef"
+        ),
+    )
+
+
+def _ce_fixture(
+    name: str,
+):
+    from pathlib import Path
+
+    return (
+        Path(__file__)
+        .resolve()
+        .parents[1]
+        / "data"
+        / "synthetic"
+        / name
+    )
+
+
+def _ce_token(
+    client,
+) -> str:
+    response = client.get(
+        "/review"
+    )
+
+    assert response.status_code == 200
+
+    values = _CeCsrfParser().feed(
+        response.text
+    )
+
+    assert len(
+        values
+    ) == 1
+
+    return values[
+        0
+    ]
+
+
+def _ce_submit(
+    client,
+    path,
+    filename: str,
+) -> str:
+    response = client.post(
+        "/reviews",
+        data={
+            "csrf_token": (
+                _ce_token(
+                    client
+                )
+            ),
+            "profile_version": "0.2.0",
+            "mapping_mode": "strict",
+        },
+        files={
+            "input_file": (
+                filename,
+                path.read_bytes(),
+                "text/csv",
+            ),
+        },
+        headers={
+            "Origin": (
+                "http://127.0.0.1:8000"
+            ),
+            "Sec-Fetch-Site": (
+                "same-origin"
+            ),
+        },
+    )
+
+    assert response.status_code == 303
+
+    location = response.headers[
+        "location"
+    ]
+
+    assert location.startswith(
+        "/results/"
+    )
+
+    return location.rsplit(
+        "/",
+        1,
+    )[-1]
+
+
+def _ce_service(
+    outer,
+):
+    return (
+        outer
+        ._app
+        .state
+        .review_workflow
+        ._get_service()
+    )
+
+
+def _ce_queue_run(
+    service,
+    *,
+    run_id: str = "d" * 32,
+    configuration_id: str = "e" * 32,
+) -> str:
+    import json
+
+    lifecycle = (
+        service._lifecycle
+    )
+
+    lifecycle.ensure_workspace(
+        "local-default"
+    )
+
+    document = {
+        "mapping_mode": "strict",
+        "profile_version": "0.2.0",
+        "source": {
+            "byte_count": 0,
+            "display_name": (
+                "queued.csv"
+            ),
+            "sha256": "0" * 64,
+        },
+    }
+
+    lifecycle.snapshot_configuration(
+        configuration_id,
+        "local-default",
+        json.dumps(
+            document,
+            sort_keys=True,
+            separators=(
+                ",",
+                ":",
+            ),
+        ),
+    )
+
+    lifecycle.queue_run(
+        run_id,
+        "local-default",
+        configuration_id,
+    )
+
+    return run_id
+
+
+class _CeBrokenResultReader:
+    def read_verified(
+        self,
+        relative_path,
+        *,
+        expected_sha256,
+        expected_byte_count,
+    ):
+        raise ValueError(
+            "verified evidence unavailable"
+        )
+
+
+def test_compare_exact_multiset_preserves_multiplicity(
+    tmp_path,
+):
+    from starlette.testclient import (
+        TestClient,
+    )
+
+    from proteomics_csv_validation.application.browser_review import (
+        _exact_finding_multiset,
+    )
+
+    outer = _ce_outer(
+        tmp_path
+    )
+
+    with TestClient(
+        outer,
+        base_url=(
+            "http://127.0.0.1:8000"
+        ),
+        follow_redirects=False,
+    ) as client:
+        run_id = _ce_submit(
+            client,
+            _ce_fixture(
+                "seeded_errors.csv"
+            ),
+            "multiplicity.csv",
+        )
+
+        result = (
+            _ce_service(
+                outer
+            ).result(
+                run_id
+            )
+        )
+
+        assert result.validation is not None
+
+        finding = (
+            result
+            .validation
+            .findings[
+                0
+            ]
+        )
+
+        common, left_only, right_only = (
+            _exact_finding_multiset(
+                (
+                    finding,
+                    finding,
+                ),
+                (
+                    finding,
+                ),
+            )
+        )
+
+        assert common == (
+            finding,
+        )
+
+        assert left_only == (
+            finding,
+        )
+
+        assert right_only == ()
+
+
+def test_compare_preserves_display_identity_and_source_byte_identity(
+    tmp_path,
+):
+    from starlette.testclient import (
+        TestClient,
+    )
+
+    outer = _ce_outer(
+        tmp_path
+    )
+
+    with TestClient(
+        outer,
+        base_url=(
+            "http://127.0.0.1:8000"
+        ),
+        follow_redirects=False,
+    ) as client:
+        fixture = _ce_fixture(
+            "seeded_errors.csv"
+        )
+
+        left_id = _ce_submit(
+            client,
+            fixture,
+            "left-display.csv",
+        )
+
+        right_id = _ce_submit(
+            client,
+            fixture,
+            "right-display.csv",
+        )
+
+        comparison = (
+            _ce_service(
+                outer
+            ).compare(
+                left_id,
+                right_id,
+            )
+        )
+
+        assert (
+            comparison.same_source_bytes
+            is True
+        )
+
+        assert (
+            comparison
+            .left
+            .configuration
+            is not None
+        )
+
+        assert (
+            comparison
+            .right
+            .configuration
+            is not None
+        )
+
+        assert (
+            comparison
+            .left
+            .configuration
+            .source
+            .display_name
+            == "left-display.csv"
+        )
+
+        assert (
+            comparison
+            .right
+            .configuration
+            .source
+            .display_name
+            == "right-display.csv"
+        )
+
+
+def test_compare_summary_delta_is_right_minus_left_and_labels_are_sorted(
+    tmp_path,
+):
+    from starlette.testclient import (
+        TestClient,
+    )
+
+    outer = _ce_outer(
+        tmp_path
+    )
+
+    with TestClient(
+        outer,
+        base_url=(
+            "http://127.0.0.1:8000"
+        ),
+        follow_redirects=False,
+    ) as client:
+        left_id = _ce_submit(
+            client,
+            _ce_fixture(
+                "baseline_valid.csv"
+            ),
+            "baseline.csv",
+        )
+
+        right_id = _ce_submit(
+            client,
+            _ce_fixture(
+                "seeded_errors.csv"
+            ),
+            "seeded.csv",
+        )
+
+        comparison = (
+            _ce_service(
+                outer
+            ).compare(
+                left_id,
+                right_id,
+            )
+        )
+
+        assert (
+            comparison
+            .total_findings
+            .delta
+            ==
+            (
+                comparison
+                .total_findings
+                .right_count
+                -
+                comparison
+                .total_findings
+                .left_count
+            )
+        )
+
+        for values in (
+            comparison.category_counts,
+            comparison.code_counts,
+            comparison.severity_counts,
+            comparison.scope_counts,
+        ):
+            labels = [
+                value.label
+                for value in values
+            ]
+
+            assert labels == sorted(
+                labels
+            )
+
+            for value in values:
+                assert (
+                    value.delta
+                    ==
+                    value.right_count
+                    - value.left_count
+                )
+
+
+def test_compare_rejects_same_run(
+    tmp_path,
+):
+    import pytest
+
+    from starlette.testclient import (
+        TestClient,
+    )
+
+    from proteomics_csv_validation.application.browser_review import (
+        ReviewComparisonInvalid,
+    )
+
+    outer = _ce_outer(
+        tmp_path
+    )
+
+    with TestClient(
+        outer,
+        base_url=(
+            "http://127.0.0.1:8000"
+        ),
+        follow_redirects=False,
+    ) as client:
+        run_id = _ce_submit(
+            client,
+            _ce_fixture(
+                "baseline_valid.csv"
+            ),
+            "same.csv",
+        )
+
+        with pytest.raises(
+            ReviewComparisonInvalid
+        ):
+            _ce_service(
+                outer
+            ).compare(
+                run_id,
+                run_id,
+            )
+
+
+def test_compare_rejects_non_successful_run(
+    tmp_path,
+):
+    import pytest
+
+    from starlette.testclient import (
+        TestClient,
+    )
+
+    from proteomics_csv_validation.application.browser_review import (
+        ReviewComparisonIneligible,
+    )
+
+    outer = _ce_outer(
+        tmp_path
+    )
+
+    with TestClient(
+        outer,
+        base_url=(
+            "http://127.0.0.1:8000"
+        ),
+        follow_redirects=False,
+    ) as client:
+        success_id = _ce_submit(
+            client,
+            _ce_fixture(
+                "baseline_valid.csv"
+            ),
+            "success.csv",
+        )
+
+        service = _ce_service(
+            outer
+        )
+
+        queued_id = _ce_queue_run(
+            service
+        )
+
+        with pytest.raises(
+            ReviewComparisonIneligible
+        ):
+            service.compare(
+                queued_id,
+                success_id,
+            )
+
+
+def test_compare_fails_closed_when_verified_evidence_is_unavailable(
+    tmp_path,
+):
+    import pytest
+
+    from starlette.testclient import (
+        TestClient,
+    )
+
+    from proteomics_csv_validation.application.browser_review import (
+        ReviewComparisonUnavailable,
+    )
+
+    outer = _ce_outer(
+        tmp_path
+    )
+
+    with TestClient(
+        outer,
+        base_url=(
+            "http://127.0.0.1:8000"
+        ),
+        follow_redirects=False,
+    ) as client:
+        fixture = _ce_fixture(
+            "baseline_valid.csv"
+        )
+
+        left_id = _ce_submit(
+            client,
+            fixture,
+            "left.csv",
+        )
+
+        right_id = _ce_submit(
+            client,
+            fixture,
+            "right.csv",
+        )
+
+        service = _ce_service(
+            outer
+        )
+
+        service._result_reader = (
+            _CeBrokenResultReader()
+        )
+
+        with pytest.raises(
+            ReviewComparisonUnavailable
+        ):
+            service.compare(
+                left_id,
+                right_id,
+            )
+
+
+def test_export_result_returns_exact_bytes_without_new_publication_state(
+    tmp_path,
+):
+    import sqlite3
+
+    from starlette.testclient import (
+        TestClient,
+    )
+
+    outer = _ce_outer(
+        tmp_path
+    )
+
+    with TestClient(
+        outer,
+        base_url=(
+            "http://127.0.0.1:8000"
+        ),
+        follow_redirects=False,
+    ) as client:
+        run_id = _ce_submit(
+            client,
+            _ce_fixture(
+                "seeded_errors.csv"
+            ),
+            "export.csv",
+        )
+
+        service = _ce_service(
+            outer
+        )
+
+        artifacts_before = (
+            service
+            ._publication
+            .list_artifacts(
+                run_id
+            )
+        )
+
+        assert len(
+            artifacts_before
+        ) == 1
+
+        artifact = (
+            artifacts_before[
+                0
+            ]
+        )
+
+        expected = (
+            service
+            ._result_reader
+            .read_verified(
+                artifact.relative_path,
+                expected_sha256=(
+                    artifact.sha256
+                ),
+                expected_byte_count=(
+                    artifact.byte_count
+                ),
+            )
+        )
+
+        database = (
+            service
+            ._lifecycle
+            .repository
+            .database_path
+        )
+
+        with sqlite3.connect(
+            database
+        ) as connection:
+            attempts_before = (
+                connection.execute(
+                    "SELECT COUNT(*) FROM export_attempt"
+                ).fetchone()[0]
+            )
+
+        exported = (
+            service.export_result(
+                run_id
+            )
+        )
+
+        assert (
+            exported.payload
+            == expected
+        )
+
+        assert (
+            exported.sha256
+            == artifact.sha256
+        )
+
+        assert (
+            exported.byte_count
+            == artifact.byte_count
+        )
+
+        assert (
+            exported.media_type
+            == "application/json"
+        )
+
+        assert (
+            exported.filename
+            ==
+            "result-bundle-"
+            + run_id
+            + ".json"
+        )
+
+        artifacts_after = (
+            service
+            ._publication
+            .list_artifacts(
+                run_id
+            )
+        )
+
+        with sqlite3.connect(
+            database
+        ) as connection:
+            attempts_after = (
+                connection.execute(
+                    "SELECT COUNT(*) FROM export_attempt"
+                ).fetchone()[0]
+            )
+
+        assert (
+            attempts_before
+            == attempts_after
+            == 0
+        )
+
+        assert (
+            artifacts_after
+            == artifacts_before
+        )
+
+
+def test_export_result_rejects_non_successful_run(
+    tmp_path,
+):
+    import pytest
+
+    from starlette.testclient import (
+        TestClient,
+    )
+
+    from proteomics_csv_validation.application.browser_review import (
+        ReviewExportIneligible,
+    )
+
+    outer = _ce_outer(
+        tmp_path
+    )
+
+    with TestClient(
+        outer,
+        base_url=(
+            "http://127.0.0.1:8000"
+        ),
+        follow_redirects=False,
+    ):
+        service = _ce_service(
+            outer
+        )
+
+        run_id = _ce_queue_run(
+            service
+        )
+
+        with pytest.raises(
+            ReviewExportIneligible
+        ):
+            service.export_result(
+                run_id
+            )
+
+
+def test_compare_page_empty_is_accessible_and_no_store(
+    tmp_path,
+):
+    from starlette.testclient import (
+        TestClient,
+    )
+
+    outer = _ce_outer(
+        tmp_path
+    )
+
+    with TestClient(
+        outer,
+        base_url=(
+            "http://127.0.0.1:8000"
+        ),
+        follow_redirects=False,
+    ) as client:
+        response = client.get(
+            "/compare"
+        )
+
+        assert response.status_code == 200
+
+        assert (
+            'for="left-run"'
+            in response.text
+        )
+
+        assert (
+            'for="right-run"'
+            in response.text
+        )
+
+        assert (
+            'name="left"'
+            in response.text
+        )
+
+        assert (
+            'name="right"'
+            in response.text
+        )
+
+        assert (
+            "no-store"
+            in response.headers[
+                "cache-control"
+            ]
+        )
+
+
+def test_compare_http_rejects_malformed_and_same_ids(
+    tmp_path,
+):
+    from starlette.testclient import (
+        TestClient,
+    )
+
+    outer = _ce_outer(
+        tmp_path
+    )
+
+    with TestClient(
+        outer,
+        base_url=(
+            "http://127.0.0.1:8000"
+        ),
+        follow_redirects=False,
+    ) as client:
+        malformed = client.get(
+            "/compare",
+            params={
+                "left": "bad",
+                "right": "f" * 32,
+            },
+        )
+
+        assert malformed.status_code == 400
+
+        same = client.get(
+            "/compare",
+            params={
+                "left": "a" * 32,
+                "right": "a" * 32,
+            },
+        )
+
+        assert same.status_code == 400
+
+
+def test_compare_http_missing_run_is_404(
+    tmp_path,
+):
+    from starlette.testclient import (
+        TestClient,
+    )
+
+    outer = _ce_outer(
+        tmp_path
+    )
+
+    with TestClient(
+        outer,
+        base_url=(
+            "http://127.0.0.1:8000"
+        ),
+        follow_redirects=False,
+    ) as client:
+        response = client.get(
+            "/compare",
+            params={
+                "left": "a" * 32,
+                "right": "b" * 32,
+            },
+        )
+
+        assert response.status_code == 404
+
+
+def test_compare_http_success_escapes_source_identity_and_renders_evidence(
+    tmp_path,
+):
+    from starlette.testclient import (
+        TestClient,
+    )
+
+    outer = _ce_outer(
+        tmp_path
+    )
+
+    with TestClient(
+        outer,
+        base_url=(
+            "http://127.0.0.1:8000"
+        ),
+        follow_redirects=False,
+    ) as client:
+        fixture = _ce_fixture(
+            "seeded_errors.csv"
+        )
+
+        left_id = _ce_submit(
+            client,
+            fixture,
+            "<svg onload=alert(1)>.csv",
+        )
+
+        right_id = _ce_submit(
+            client,
+            fixture,
+            "right.csv",
+        )
+
+        response = client.get(
+            "/compare",
+            params={
+                "left": left_id,
+                "right": right_id,
+            },
+        )
+
+        assert response.status_code == 200
+
+        assert "<svg" not in response.text
+
+        assert (
+            "&lt;svg"
+            in response.text
+        )
+
+        assert left_id in response.text
+        assert right_id in response.text
+
+        assert (
+            "Same source bytes:"
+            in response.text
+        )
+
+        assert (
+            "right minus left"
+            in response.text
+        )
+
+        assert (
+            "not quality scores or biological interpretation"
+            in response.text
+        )
+
+
+def test_export_http_returns_exact_bytes_and_download_headers(
+    tmp_path,
+):
+    from starlette.testclient import (
+        TestClient,
+    )
+
+    outer = _ce_outer(
+        tmp_path
+    )
+
+    with TestClient(
+        outer,
+        base_url=(
+            "http://127.0.0.1:8000"
+        ),
+        follow_redirects=False,
+    ) as client:
+        run_id = _ce_submit(
+            client,
+            _ce_fixture(
+                "seeded_errors.csv"
+            ),
+            "download.csv",
+        )
+
+        expected = (
+            _ce_service(
+                outer
+            ).export_result(
+                run_id
+            )
+        )
+
+        response = client.get(
+            "/results/"
+            + run_id
+            + "/export"
+        )
+
+        assert response.status_code == 200
+
+        assert (
+            response.content
+            == expected.payload
+        )
+
+        assert (
+            response.headers[
+                "content-type"
+            ].startswith(
+                "application/json"
+            )
+        )
+
+        assert (
+            response.headers[
+                "content-disposition"
+            ]
+            ==
+            (
+                'attachment; filename="'
+                + expected.filename
+                + '"'
+            )
+        )
+
+        assert (
+            "no-store"
+            in response.headers[
+                "cache-control"
+            ]
+        )
+
+
+def test_export_http_malformed_and_missing_run_are_404(
+    tmp_path,
+):
+    from starlette.testclient import (
+        TestClient,
+    )
+
+    outer = _ce_outer(
+        tmp_path
+    )
+
+    with TestClient(
+        outer,
+        base_url=(
+            "http://127.0.0.1:8000"
+        ),
+        follow_redirects=False,
+    ) as client:
+        malformed = client.get(
+            "/results/bad/export"
+        )
+
+        assert malformed.status_code == 404
+
+        missing = client.get(
+            "/results/"
+            + "a" * 32
+            + "/export"
+        )
+
+        assert missing.status_code == 404
+
+
+def test_compare_http_non_successful_run_is_409(
+    tmp_path,
+):
+    from starlette.testclient import (
+        TestClient,
+    )
+
+    outer = _ce_outer(
+        tmp_path
+    )
+
+    with TestClient(
+        outer,
+        base_url=(
+            "http://127.0.0.1:8000"
+        ),
+        follow_redirects=False,
+    ) as client:
+        success_id = _ce_submit(
+            client,
+            _ce_fixture(
+                "baseline_valid.csv"
+            ),
+            "success.csv",
+        )
+
+        service = _ce_service(
+            outer
+        )
+
+        queued_id = _ce_queue_run(
+            service
+        )
+
+        response = client.get(
+            "/compare",
+            params={
+                "left": queued_id,
+                "right": success_id,
+            },
+        )
+
+        assert response.status_code == 409
+
+
+def test_export_http_non_successful_run_is_409(
+    tmp_path,
+):
+    from starlette.testclient import (
+        TestClient,
+    )
+
+    outer = _ce_outer(
+        tmp_path
+    )
+
+    with TestClient(
+        outer,
+        base_url=(
+            "http://127.0.0.1:8000"
+        ),
+        follow_redirects=False,
+    ) as client:
+        service = _ce_service(
+            outer
+        )
+
+        queued_id = _ce_queue_run(
+            service
+        )
+
+        response = client.get(
+            "/results/"
+            + queued_id
+            + "/export"
+        )
+
+        assert response.status_code == 409
+
+
+def test_compare_http_unavailable_evidence_is_503(
+    tmp_path,
+):
+    from starlette.testclient import (
+        TestClient,
+    )
+
+    outer = _ce_outer(
+        tmp_path
+    )
+
+    with TestClient(
+        outer,
+        base_url=(
+            "http://127.0.0.1:8000"
+        ),
+        follow_redirects=False,
+    ) as client:
+        fixture = _ce_fixture(
+            "baseline_valid.csv"
+        )
+
+        left_id = _ce_submit(
+            client,
+            fixture,
+            "left.csv",
+        )
+
+        right_id = _ce_submit(
+            client,
+            fixture,
+            "right.csv",
+        )
+
+        service = _ce_service(
+            outer
+        )
+
+        service._result_reader = (
+            _CeBrokenResultReader()
+        )
+
+        response = client.get(
+            "/compare",
+            params={
+                "left": left_id,
+                "right": right_id,
+            },
+        )
+
+        assert response.status_code == 503
+
+
+def test_export_http_unavailable_evidence_is_503(
+    tmp_path,
+):
+    from starlette.testclient import (
+        TestClient,
+    )
+
+    outer = _ce_outer(
+        tmp_path
+    )
+
+    with TestClient(
+        outer,
+        base_url=(
+            "http://127.0.0.1:8000"
+        ),
+        follow_redirects=False,
+    ) as client:
+        run_id = _ce_submit(
+            client,
+            _ce_fixture(
+                "baseline_valid.csv"
+            ),
+            "unavailable.csv",
+        )
+
+        service = _ce_service(
+            outer
+        )
+
+        service._result_reader = (
+            _CeBrokenResultReader()
+        )
+
+        response = client.get(
+            "/results/"
+            + run_id
+            + "/export"
+        )
+
+        assert response.status_code == 503
+
+
+def test_compare_export_web_architecture_and_template_guards():
+    from pathlib import Path
+
+    root = (
+        Path(__file__)
+        .resolve()
+        .parents[1]
+    )
+
+    web = (
+        root
+        / "src"
+        / "proteomics_csv_validation"
+        / "web"
+        / "review.py"
+    ).read_text(
+        encoding="utf-8"
+    )
+
+    for forbidden in (
+        "sqlite3",
+        "SQLiteRunRepository",
+        "json.loads",
+        "FilesystemResultStore",
+        "read_verified",
+    ):
+        assert forbidden not in web
+
+    compare = (
+        root
+        / "src"
+        / "proteomics_csv_validation"
+        / "web"
+        / "templates"
+        / "compare.html"
+    ).read_text(
+        encoding="utf-8"
+    )
+
+    assert "<script" not in (
+        compare.casefold()
+    )
+
+    assert "|safe" not in compare
+
+    assert (
+        "not quality scores or biological interpretation"
+        in compare
+    )
+
+    history = (
+        root
+        / "src"
+        / "proteomics_csv_validation"
+        / "web"
+        / "templates"
+        / "history.html"
+    ).read_text(
+        encoding="utf-8"
+    )
+
+    result = (
+        root
+        / "src"
+        / "proteomics_csv_validation"
+        / "web"
+        / "templates"
+        / "result.html"
+    ).read_text(
+        encoding="utf-8"
+    )
+
+    assert 'href="/compare"' in history
+
+    assert (
+        "/results/{{ result.run_id }}/export"
+        in result
+    )
+
+    assert (
+        "/compare?left={{ result.run_id }}"
+        in result
+    )

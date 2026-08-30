@@ -531,4 +531,15 @@
     Run another review
   </a>
 </p>
+
+{% if result.status == "SUCCEEDED" and result.evidence_available %}
+<div class="page-actions">
+  <a href="/results/{{ result.run_id }}/export">
+    Export verified Result Bundle JSON
+  </a>
+  <a href="/compare?left={{ result.run_id }}">
+    Compare this run
+  </a>
+</div>
+{% endif %}
 {% endblock %}

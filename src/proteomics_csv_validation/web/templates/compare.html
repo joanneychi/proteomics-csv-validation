@@ -1,0 +1,417 @@
+{% extends "base.html" %}
+
+{% block title %}Compare review runs{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+  <p class="eyebrow">Review evidence</p>
+  <h1>Compare review runs</h1>
+  <p>
+    Compare exact structural-review evidence from two completed runs.
+    Finding and count differences are structural review evidence only.
+    They are not quality scores or biological interpretation.
+  </p>
+</section>
+
+<section class="result-panel" aria-labelledby="compare-selection-heading">
+  <h2 id="compare-selection-heading">Select runs</h2>
+
+  <form method="get" action="/compare">
+    <div class="evidence-grid">
+      <div>
+        <label for="left-run">Left run ID</label>
+        <input
+          id="left-run"
+          name="left"
+          type="text"
+          value="{{ left_value }}"
+          autocomplete="off"
+        >
+      </div>
+
+      <div>
+        <label for="right-run">Right run ID</label>
+        <input
+          id="right-run"
+          name="right"
+          type="text"
+          value="{{ right_value }}"
+          autocomplete="off"
+        >
+      </div>
+    </div>
+
+    <div class="page-actions">
+      <button type="submit">Compare runs</button>
+      <a href="/history">Review history</a>
+    </div>
+  </form>
+</section>
+
+{% if comparison %}
+<section class="result-panel" aria-labelledby="run-identity-heading">
+  <h2 id="run-identity-heading">Run identity</h2>
+
+  <div class="evidence-grid">
+    <div>
+      <strong>Left run</strong>
+      <div>{{ comparison.left.run_id }}</div>
+      <div>
+        <a href="/results/{{ comparison.left.run_id }}">Open left run record</a>
+      </div>
+    </div>
+
+    <div>
+      <strong>Right run</strong>
+      <div>{{ comparison.right.run_id }}</div>
+      <div>
+        <a href="/results/{{ comparison.right.run_id }}">Open right run record</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="result-panel" aria-labelledby="source-evidence-heading">
+  <h2 id="source-evidence-heading">Source evidence</h2>
+
+  <div class="evidence-grid">
+    <div>
+      <strong>Left source</strong>
+      <div>{{ comparison.left.configuration.source.display_name }}</div>
+      <div>SHA-256: {{ comparison.left.configuration.source.sha256 }}</div>
+      <div>Bytes: {{ comparison.left.configuration.source.byte_count }}</div>
+    </div>
+
+    <div>
+      <strong>Right source</strong>
+      <div>{{ comparison.right.configuration.source.display_name }}</div>
+      <div>SHA-256: {{ comparison.right.configuration.source.sha256 }}</div>
+      <div>Bytes: {{ comparison.right.configuration.source.byte_count }}</div>
+    </div>
+  </div>
+
+  <p>
+    Same source bytes:
+    {% if comparison.same_source_bytes %}Yes{% else %}No{% endif %}
+  </p>
+
+  <p>
+    Source-byte identity is based on SHA-256 and byte count.
+    Display names remain separate descriptive evidence.
+  </p>
+</section>
+
+<section class="result-panel" aria-labelledby="configuration-heading">
+  <h2 id="configuration-heading">Configuration context</h2>
+
+  <div class="evidence-grid">
+    <div>
+      <strong>Left</strong>
+      <div>Profile version: {{ comparison.left.configuration.profile_version }}</div>
+      <div>Mapping mode: {{ comparison.left.configuration.mapping_mode }}</div>
+
+      {% if comparison.left.configuration.column_mapping_source %}
+      <div>
+        Mapping source:
+        {{ comparison.left.configuration.column_mapping_source.display_name }}
+      </div>
+      <div>
+        Mapping source SHA-256:
+        {{ comparison.left.configuration.column_mapping_source.sha256 }}
+      </div>
+      {% endif %}
+    </div>
+
+    <div>
+      <strong>Right</strong>
+      <div>Profile version: {{ comparison.right.configuration.profile_version }}</div>
+      <div>Mapping mode: {{ comparison.right.configuration.mapping_mode }}</div>
+
+      {% if comparison.right.configuration.column_mapping_source %}
+      <div>
+        Mapping source:
+        {{ comparison.right.configuration.column_mapping_source.display_name }}
+      </div>
+      <div>
+        Mapping source SHA-256:
+        {{ comparison.right.configuration.column_mapping_source.sha256 }}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="evidence-grid">
+    <div>
+      Same profile version:
+      {% if comparison.same_profile_version %}Yes{% else %}No{% endif %}
+    </div>
+
+    <div>
+      Same mapping mode:
+      {% if comparison.same_mapping_mode %}Yes{% else %}No{% endif %}
+    </div>
+
+    <div>
+      Same mapping-source bytes:
+      {% if comparison.same_mapping_source %}Yes{% else %}No{% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="result-panel" aria-labelledby="validation-context-heading">
+  <h2 id="validation-context-heading">Validation context</h2>
+
+  <div class="evidence-grid">
+    <div>
+      <strong>Left</strong>
+      <div>
+        Application version:
+        {{ comparison.left.validation.application_version }}
+      </div>
+      <div>
+        Descriptor schema version:
+        {{ comparison.left.validation.descriptor_schema_version }}
+      </div>
+      <div>
+        Profile:
+        {{ comparison.left.validation.profile_id }}
+        {{ comparison.left.validation.profile_version }}
+      </div>
+      <div>Rows: {{ comparison.left.validation.rows }}</div>
+    </div>
+
+    <div>
+      <strong>Right</strong>
+      <div>
+        Application version:
+        {{ comparison.right.validation.application_version }}
+      </div>
+      <div>
+        Descriptor schema version:
+        {{ comparison.right.validation.descriptor_schema_version }}
+      </div>
+      <div>
+        Profile:
+        {{ comparison.right.validation.profile_id }}
+        {{ comparison.right.validation.profile_version }}
+      </div>
+      <div>Rows: {{ comparison.right.validation.rows }}</div>
+    </div>
+  </div>
+
+  <div class="evidence-grid">
+    <div>
+      Same application version:
+      {% if comparison.same_application_version %}Yes{% else %}No{% endif %}
+    </div>
+    <div>
+      Same descriptor schema version:
+      {% if comparison.same_descriptor_schema_version %}Yes{% else %}No{% endif %}
+    </div>
+    <div>
+      Same profile ID:
+      {% if comparison.same_profile_id %}Yes{% else %}No{% endif %}
+    </div>
+    <div>
+      Same validation profile version:
+      {% if comparison.same_validation_profile_version %}Yes{% else %}No{% endif %}
+    </div>
+    <div>
+      Same configured rules:
+      {% if comparison.same_configured_rules %}Yes{% else %}No{% endif %}
+    </div>
+    <div>
+      Same column-mapping evidence:
+      {% if comparison.same_column_mapping %}Yes{% else %}No{% endif %}
+    </div>
+  </div>
+
+  <h3>Left configured rules</h3>
+  <div class="evidence-grid">
+    {% for rule in comparison.left.validation.configured_rules %}
+    <div>{{ rule.rule_id }} {{ rule.rule_version }}</div>
+    {% else %}
+    <div>No configured rules recorded.</div>
+    {% endfor %}
+  </div>
+
+  <h3>Right configured rules</h3>
+  <div class="evidence-grid">
+    {% for rule in comparison.right.validation.configured_rules %}
+    <div>{{ rule.rule_id }} {{ rule.rule_version }}</div>
+    {% else %}
+    <div>No configured rules recorded.</div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="result-panel" aria-labelledby="summary-heading">
+  <h2 id="summary-heading">Summary comparison</h2>
+
+  <p>
+    All deltas below are right minus left.
+  </p>
+
+  <div class="evidence-grid">
+    <div>
+      <strong>Total findings</strong>
+      <div>Left: {{ comparison.total_findings.left_count }}</div>
+      <div>Right: {{ comparison.total_findings.right_count }}</div>
+      <div>Delta: {{ comparison.total_findings.delta }}</div>
+    </div>
+  </div>
+
+  <h3>Category counts</h3>
+  <div class="evidence-grid">
+    {% for item in comparison.category_counts %}
+    <div>
+      <strong>{{ item.label }}</strong>
+      <div>Left: {{ item.left_count }}</div>
+      <div>Right: {{ item.right_count }}</div>
+      <div>Delta: {{ item.delta }}</div>
+    </div>
+    {% else %}
+    <div>No category counts recorded.</div>
+    {% endfor %}
+  </div>
+
+  <h3>Finding-code counts</h3>
+  <div class="evidence-grid">
+    {% for item in comparison.code_counts %}
+    <div>
+      <strong>{{ item.label }}</strong>
+      <div>Left: {{ item.left_count }}</div>
+      <div>Right: {{ item.right_count }}</div>
+      <div>Delta: {{ item.delta }}</div>
+    </div>
+    {% else %}
+    <div>No finding-code counts recorded.</div>
+    {% endfor %}
+  </div>
+
+  <h3>Severity counts</h3>
+  <div class="evidence-grid">
+    {% for item in comparison.severity_counts %}
+    <div>
+      <strong>{{ item.label }}</strong>
+      <div>Left: {{ item.left_count }}</div>
+      <div>Right: {{ item.right_count }}</div>
+      <div>Delta: {{ item.delta }}</div>
+    </div>
+    {% else %}
+    <div>No severity counts recorded.</div>
+    {% endfor %}
+  </div>
+
+  <h3>Scope counts</h3>
+  <div class="evidence-grid">
+    {% for item in comparison.scope_counts %}
+    <div>
+      <strong>{{ item.label }}</strong>
+      <div>Left: {{ item.left_count }}</div>
+      <div>Right: {{ item.right_count }}</div>
+      <div>Delta: {{ item.delta }}</div>
+    </div>
+    {% else %}
+    <div>No scope counts recorded.</div>
+    {% endfor %}
+  </div>
+</section>
+
+{% macro render_finding(finding) %}
+<article class="result-panel">
+  <div><strong>Code:</strong> {{ finding.code }}</div>
+  <div><strong>Category:</strong> {{ finding.category }}</div>
+  <div><strong>Severity:</strong> {{ finding.severity }}</div>
+  <div><strong>Scope:</strong> {{ finding.scope }}</div>
+
+  {% if finding.rule %}
+  <div>
+    <strong>Rule:</strong>
+    {{ finding.rule.rule_id }} {{ finding.rule.rule_version }}
+  </div>
+  {% endif %}
+
+  {% if finding.location %}
+  <div>
+    <strong>Location:</strong>
+    row {{ finding.location.row_number }},
+    field {{ finding.location.field_name }}
+  </div>
+  {% endif %}
+
+  {% if finding.entity %}
+  <div>
+    <strong>Entity:</strong>
+    {{ finding.entity.entity_type }}
+
+    {% for key in finding.entity.key_parts %}
+    <span>{{ key.field_name }}={{ key.value }}</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div>
+    <strong>Observed:</strong>
+    {% if finding.observed_value %}
+      {{ finding.observed_value.display_value }}
+    {% else %}
+      None recorded
+    {% endif %}
+  </div>
+
+  <div>
+    <strong>Expected:</strong>
+    {% if finding.expected_value %}
+      {{ finding.expected_value.display_value }}
+    {% else %}
+      None recorded
+    {% endif %}
+  </div>
+
+  <div><strong>Message:</strong> {{ finding.message }}</div>
+</article>
+{% endmacro %}
+
+<section aria-labelledby="common-findings-heading">
+  <h2 id="common-findings-heading">
+    Exact findings on both sides
+  </h2>
+
+  {% for finding in comparison.common_findings %}
+    {{ render_finding(finding) }}
+  {% else %}
+  <p>No exact findings are shared by both sides.</p>
+  {% endfor %}
+</section>
+
+<section aria-labelledby="left-findings-heading">
+  <h2 id="left-findings-heading">
+    Exact findings only on left
+  </h2>
+
+  {% for finding in comparison.left_only_findings %}
+    {{ render_finding(finding) }}
+  {% else %}
+  <p>No exact findings are unique to the left side.</p>
+  {% endfor %}
+</section>
+
+<section aria-labelledby="right-findings-heading">
+  <h2 id="right-findings-heading">
+    Exact findings only on right
+  </h2>
+
+  {% for finding in comparison.right_only_findings %}
+    {{ render_finding(finding) }}
+  {% else %}
+  <p>No exact findings are unique to the right side.</p>
+  {% endfor %}
+</section>
+{% endif %}
+
+<div class="page-actions">
+  <a href="/history">Review history</a>
+  <a href="/review">Start a structural review</a>
+</div>
+{% endblock %}
