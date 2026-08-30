@@ -1059,6 +1059,71 @@ class SQLiteRunRepository:
         finally:
             connection.close()
 
+    def list_runs(
+        self,
+        workspace_id: str,
+        *,
+        limit: int,
+    ) -> tuple[AnalysisRunRecord, ...]:
+        if (
+            isinstance(
+                limit,
+                bool,
+            )
+            or not isinstance(
+                limit,
+                int,
+            )
+        ):
+            raise TypeError(
+                "limit must be an integer."
+            )
+
+        if limit <= 0:
+            raise ValueError(
+                "limit must be positive."
+            )
+
+        connection = _connect(
+            self.database_path
+        )
+
+        try:
+            rows = connection.execute(
+                """
+                SELECT
+                    run_id,
+                    workspace_id,
+                    configuration_id,
+                    status,
+                    created_at,
+                    queued_at,
+                    started_at,
+                    finished_at,
+                    cancel_requested_at
+                FROM analysis_run
+                WHERE workspace_id = ?
+                ORDER BY
+                    created_at DESC,
+                    run_id DESC
+                LIMIT ?
+                """,
+                (
+                    workspace_id,
+                    limit,
+                ),
+            ).fetchall()
+
+            return tuple(
+                _run_from_row(
+                    row
+                )
+                for row in rows
+            )
+
+        finally:
+            connection.close()
+
 
 
     def get_run(

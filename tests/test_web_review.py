@@ -2143,3 +2143,857 @@ def test_detailed_mapping_evidence_rejects_impossible_domain_states() -> None:
             "Impossible mapping evidence was accepted: "
             + label
         )
+
+
+def _history_direct_service(
+    *,
+    runs,
+    configurations,
+):
+    from types import SimpleNamespace
+
+    from proteomics_csv_validation.application.browser_review import (
+        ReviewWorkflowService,
+    )
+    from proteomics_csv_validation.domain.run_lifecycle import (
+        LedgerRecordNotFoundError,
+    )
+
+    class Lifecycle:
+        def __init__(self):
+            self.last_list_request = None
+
+        def list_runs(
+            self,
+            workspace_id,
+            *,
+            limit,
+        ):
+            self.last_list_request = (
+                workspace_id,
+                limit,
+            )
+
+            return tuple(
+                runs
+            )
+
+        def get_configuration(
+            self,
+            configuration_id,
+        ):
+            value = configurations.get(
+                configuration_id
+            )
+
+            if value is None:
+                raise LedgerRecordNotFoundError(
+                    "Run configuration does not exist."
+                )
+
+            return value
+
+    lifecycle = Lifecycle()
+
+    service = ReviewWorkflowService(
+        lifecycle=lifecycle,
+        execution=SimpleNamespace(),
+        publication=SimpleNamespace(),
+        result_reader=SimpleNamespace(),
+    )
+
+    return lifecycle, service
+
+
+def _history_direct_run(
+    *,
+    run_id="1" * 32,
+    configuration_id="a" * 32,
+    workspace_id="local-default",
+):
+    from types import SimpleNamespace
+
+    from proteomics_csv_validation.domain.run_lifecycle import (
+        RunState,
+    )
+
+    return SimpleNamespace(
+        run_id=run_id,
+        workspace_id=workspace_id,
+        configuration_id=configuration_id,
+        status=RunState.SUCCEEDED,
+        created_at="2026-01-01T00:00:00Z",
+        queued_at="2026-01-01T00:00:00Z",
+        started_at="2026-01-01T00:01:00Z",
+        finished_at="2026-01-01T00:02:00Z",
+        cancel_requested_at=None,
+    )
+
+
+def _history_direct_configuration(
+    document,
+    *,
+    configuration_id="a" * 32,
+    workspace_id="local-default",
+    sha256_override=None,
+):
+    from hashlib import sha256
+    import json
+    from types import SimpleNamespace
+
+    canonical = (
+        document
+        if isinstance(
+            document,
+            str,
+        )
+        else json.dumps(
+            document,
+            sort_keys=True,
+            separators=(
+                ",",
+                ":",
+            ),
+        )
+    )
+
+    digest = sha256(
+        canonical.encode(
+            "utf-8"
+        )
+    ).hexdigest()
+
+    return SimpleNamespace(
+        configuration_id=configuration_id,
+        workspace_id=workspace_id,
+        source_draft_id=None,
+        source_draft_revision=None,
+        canonical_json=canonical,
+        sha256=(
+            digest
+            if sha256_override is None
+            else sha256_override
+        ),
+        created_at="2026-01-01T00:00:00Z",
+    )
+
+
+def _history_valid_document(
+    *,
+    display_name="history.csv",
+    mapping_mode="strict",
+):
+    from hashlib import sha256
+
+    document = {
+        "mapping_mode": mapping_mode,
+        "profile_version": "0.2.0",
+        "source": {
+            "byte_count": 10,
+            "display_name": display_name,
+            "sha256": sha256(
+                b"history"
+            ).hexdigest(),
+        },
+    }
+
+    if mapping_mode == "explicit":
+        document[
+            "column_mapping_source"
+        ] = {
+            "byte_count": 5,
+            "display_name": "mapping.json",
+            "sha256": sha256(
+                b"map"
+            ).hexdigest(),
+        }
+
+    return document
+
+
+def test_history_empty_is_accessible_no_store_and_discoverable(
+    tmp_path: Path,
+) -> None:
+    outer = _application(
+        tmp_path
+    )
+
+    with TestClient(
+        outer,
+        base_url=_ORIGIN,
+    ) as client:
+        review = client.get(
+            "/review"
+        )
+
+        assert review.status_code == 200
+        assert 'href="/history"' in review.text
+
+        response = client.get(
+            "/history"
+        )
+
+        assert response.status_code == 200
+
+        assert (
+            "no-store"
+            in response.headers[
+                "cache-control"
+            ]
+        )
+
+        assert (
+            "No review runs are available yet"
+            in response.text
+        )
+
+        assert (
+            "Open run record"
+            not in response.text
+        )
+
+
+def test_history_lists_durable_identity_newest_first_with_reopen_links(
+    tmp_path: Path,
+) -> None:
+    from hashlib import sha256
+    import sqlite3
+
+    outer = _application(
+        tmp_path
+    )
+
+    with TestClient(
+        outer,
+        base_url=_ORIGIN,
+    ) as client:
+        first = _submit(
+            client,
+            _BASELINE,
+            filename="older-history.csv",
+        )
+
+        second = _submit(
+            client,
+            _BASELINE,
+            filename="newer-history.csv",
+        )
+
+        assert first.status_code == 303
+        assert second.status_code == 303
+
+        first_run = (
+            first.headers[
+                "location"
+            ].rsplit(
+                "/",
+                1,
+            )[-1]
+        )
+
+        second_run = (
+            second.headers[
+                "location"
+            ].rsplit(
+                "/",
+                1,
+            )[-1]
+        )
+
+        response = client.get(
+            "/history"
+        )
+
+        assert response.status_code == 200
+
+        assert (
+            response.text.index(
+                "newer-history.csv"
+            )
+            < response.text.index(
+                "older-history.csv"
+            )
+        )
+
+        assert "SUCCEEDED" in response.text
+        assert "0.2.0" in response.text
+        assert "strict" in response.text
+
+        source_sha = sha256(
+            _BASELINE.read_bytes()
+        ).hexdigest()
+
+        assert source_sha in response.text
+
+        assert (
+            f'href="/results/{first_run}"'
+            in response.text
+        )
+
+        assert (
+            f'href="/results/{second_run}"'
+            in response.text
+        )
+
+        database = (
+            tmp_path
+            / "app-data"
+            / "ledger.sqlite3"
+        )
+
+        with sqlite3.connect(
+            database
+        ) as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    run_configuration.sha256
+                FROM analysis_run
+                JOIN run_configuration
+                  ON run_configuration.configuration_id
+                   = analysis_run.configuration_id
+                WHERE analysis_run.run_id = ?
+                """,
+                (
+                    second_run,
+                ),
+            ).fetchone()
+
+        assert row is not None
+        assert row[0] in response.text
+
+
+def test_history_persists_across_restart_and_excludes_other_workspace(
+    tmp_path: Path,
+) -> None:
+    from hashlib import sha256
+    import json
+
+    outer = _application(
+        tmp_path
+    )
+
+    with TestClient(
+        outer,
+        base_url=_ORIGIN,
+    ) as client:
+        submitted = _submit(
+            client,
+            _BASELINE,
+            filename="persistent-history.csv",
+        )
+
+        assert submitted.status_code == 303
+
+        service = (
+            outer
+            ._app
+            .state
+            .review_workflow
+            ._get_service()
+        )
+
+        lifecycle = service._lifecycle
+
+        lifecycle.ensure_workspace(
+            "other-workspace"
+        )
+
+        document = {
+            "mapping_mode": "strict",
+            "profile_version": "0.2.0",
+            "source": {
+                "byte_count": 1,
+                "display_name": "other-workspace.csv",
+                "sha256": sha256(
+                    b"x"
+                ).hexdigest(),
+            },
+        }
+
+        lifecycle.snapshot_configuration(
+            "e" * 32,
+            "other-workspace",
+            json.dumps(
+                document,
+                sort_keys=True,
+                separators=(
+                    ",",
+                    ":",
+                ),
+            ),
+        )
+
+        lifecycle.queue_run(
+            "f" * 32,
+            "other-workspace",
+            "e" * 32,
+        )
+
+    restarted = _application(
+        tmp_path
+    )
+
+    with TestClient(
+        restarted,
+        base_url=_ORIGIN,
+    ) as client:
+        response = client.get(
+            "/history"
+        )
+
+        assert response.status_code == 200
+        assert "persistent-history.csv" in response.text
+        assert "other-workspace.csv" not in response.text
+
+
+def test_history_escapes_source_display_and_does_not_leak_private_path(
+    tmp_path: Path,
+) -> None:
+    outer = _application(
+        tmp_path
+    )
+
+    with TestClient(
+        outer,
+        base_url=_ORIGIN,
+    ) as client:
+        submitted = _submit(
+            client,
+            _BASELINE,
+            filename="<b onclick=alert(1)>.csv",
+        )
+
+        assert submitted.status_code == 303
+
+        response = client.get(
+            "/history"
+        )
+
+        assert response.status_code == 200
+
+        assert (
+            "&lt;b onclick=alert(1)&gt;.csv"
+            in response.text
+        )
+
+        assert (
+            "<b onclick=alert(1)>.csv"
+            not in response.text
+        )
+
+        assert (
+            str(
+                tmp_path
+            )
+            not in response.text
+        )
+
+
+def test_history_application_uses_fixed_workspace_and_limit(
+) -> None:
+    lifecycle, service = (
+        _history_direct_service(
+            runs=(),
+            configurations={},
+        )
+    )
+
+    assert service.history() == ()
+
+    assert (
+        lifecycle.last_list_request
+        == (
+            "local-default",
+            50,
+        )
+    )
+
+
+def test_history_application_accepts_explicit_configuration_without_bundle_read(
+) -> None:
+    run = _history_direct_run()
+
+    configuration = (
+        _history_direct_configuration(
+            _history_valid_document(
+                mapping_mode="explicit"
+            )
+        )
+    )
+
+    _, service = (
+        _history_direct_service(
+            runs=(
+                run,
+            ),
+            configurations={
+                run.configuration_id: configuration,
+            },
+        )
+    )
+
+    entries = service.history()
+
+    assert len(entries) == 1
+
+    assert (
+        entries[
+            0
+        ].mapping_mode
+        == "explicit"
+    )
+
+    assert (
+        entries[
+            0
+        ].source_display_name
+        == "history.csv"
+    )
+
+
+def test_history_application_fails_closed_for_invalid_configuration_evidence(
+) -> None:
+    from copy import deepcopy
+
+    import pytest
+
+    from proteomics_csv_validation.application.browser_review import (
+        ReviewHistoryUnavailable,
+    )
+
+    run = _history_direct_run()
+    valid = _history_valid_document()
+
+    cases = [
+        _history_direct_configuration(
+            valid,
+            sha256_override="0" * 64,
+        ),
+        _history_direct_configuration(
+            "{",
+        ),
+    ]
+
+    missing_source = deepcopy(
+        valid
+    )
+    del missing_source["source"]
+
+    cases.append(
+        _history_direct_configuration(
+            missing_source
+        )
+    )
+
+    path_source = deepcopy(
+        valid
+    )
+    path_source[
+        "source"
+    ][
+        "display_name"
+    ] = "private/path.csv"
+
+    cases.append(
+        _history_direct_configuration(
+            path_source
+        )
+    )
+
+    bad_source_sha = deepcopy(
+        valid
+    )
+    bad_source_sha[
+        "source"
+    ][
+        "sha256"
+    ] = "x" * 64
+
+    cases.append(
+        _history_direct_configuration(
+            bad_source_sha
+        )
+    )
+
+    bad_byte_count = deepcopy(
+        valid
+    )
+    bad_byte_count[
+        "source"
+    ][
+        "byte_count"
+    ] = -1
+
+    cases.append(
+        _history_direct_configuration(
+            bad_byte_count
+        )
+    )
+
+    bad_profile = deepcopy(
+        valid
+    )
+    bad_profile[
+        "profile_version"
+    ] = ""
+
+    cases.append(
+        _history_direct_configuration(
+            bad_profile
+        )
+    )
+
+    bad_mapping = deepcopy(
+        valid
+    )
+    bad_mapping[
+        "mapping_mode"
+    ] = "unsupported"
+
+    cases.append(
+        _history_direct_configuration(
+            bad_mapping
+        )
+    )
+
+    explicit_missing_mapping = deepcopy(
+        valid
+    )
+    explicit_missing_mapping[
+        "mapping_mode"
+    ] = "explicit"
+
+    cases.append(
+        _history_direct_configuration(
+            explicit_missing_mapping
+        )
+    )
+
+    nonexplicit_extra_mapping = deepcopy(
+        valid
+    )
+    nonexplicit_extra_mapping[
+        "column_mapping_source"
+    ] = {
+        "byte_count": 1,
+        "display_name": "mapping.json",
+        "sha256": "1" * 64,
+    }
+
+    cases.append(
+        _history_direct_configuration(
+            nonexplicit_extra_mapping
+        )
+    )
+
+    cases.append(
+        _history_direct_configuration(
+            valid,
+            workspace_id="other-workspace",
+        )
+    )
+
+    for configuration in cases:
+        _, service = (
+            _history_direct_service(
+                runs=(
+                    run,
+                ),
+                configurations={
+                    run.configuration_id: configuration,
+                },
+            )
+        )
+
+        with pytest.raises(
+            ReviewHistoryUnavailable
+        ):
+            service.history()
+
+    wrong_workspace_run = (
+        _history_direct_run(
+            workspace_id="other-workspace"
+        )
+    )
+
+    _, wrong_workspace_service = (
+        _history_direct_service(
+            runs=(
+                wrong_workspace_run,
+            ),
+            configurations={
+                wrong_workspace_run.configuration_id: (
+                    _history_direct_configuration(
+                        valid,
+                        configuration_id=(
+                            wrong_workspace_run.configuration_id
+                        ),
+                        workspace_id="other-workspace",
+                    )
+                ),
+            },
+        )
+    )
+
+    with pytest.raises(
+        ReviewHistoryUnavailable
+    ):
+        wrong_workspace_service.history()
+
+    _, missing_service = (
+        _history_direct_service(
+            runs=(
+                run,
+            ),
+            configurations={},
+        )
+    )
+
+    with pytest.raises(
+        ReviewHistoryUnavailable
+    ):
+        missing_service.history()
+
+
+def test_history_http_503_withholds_partial_rows_on_integrity_failure(
+    tmp_path: Path,
+) -> None:
+    from types import SimpleNamespace
+
+    from proteomics_csv_validation.domain.run_lifecycle import (
+        RunState,
+    )
+
+    outer = _application(
+        tmp_path
+    )
+
+    with TestClient(
+        outer,
+        base_url=_ORIGIN,
+    ) as client:
+        service = (
+            outer
+            ._app
+            .state
+            .review_workflow
+            ._get_service()
+        )
+
+        good_run = SimpleNamespace(
+            run_id="1" * 32,
+            workspace_id="local-default",
+            configuration_id="a" * 32,
+            status=RunState.SUCCEEDED,
+            created_at="2026-01-01T00:01:00Z",
+            queued_at="2026-01-01T00:01:00Z",
+            started_at=None,
+            finished_at=None,
+            cancel_requested_at=None,
+        )
+
+        bad_run = SimpleNamespace(
+            run_id="2" * 32,
+            workspace_id="local-default",
+            configuration_id="b" * 32,
+            status=RunState.FAILED,
+            created_at="2026-01-01T00:02:00Z",
+            queued_at="2026-01-01T00:02:00Z",
+            started_at=None,
+            finished_at=None,
+            cancel_requested_at=None,
+        )
+
+        good_configuration = (
+            _history_direct_configuration(
+                _history_valid_document(
+                    display_name=(
+                        "visible-if-partial.csv"
+                    )
+                ),
+                configuration_id=(
+                    good_run.configuration_id
+                ),
+            )
+        )
+
+        bad_configuration = (
+            _history_direct_configuration(
+                _history_valid_document(
+                    display_name=(
+                        "bad-history.csv"
+                    )
+                ),
+                configuration_id=(
+                    bad_run.configuration_id
+                ),
+                sha256_override="0" * 64,
+            )
+        )
+
+        class CorruptLifecycle:
+            def list_runs(
+                self,
+                workspace_id,
+                *,
+                limit,
+            ):
+                assert (
+                    workspace_id
+                    == "local-default"
+                )
+
+                assert limit == 50
+
+                return (
+                    bad_run,
+                    good_run,
+                )
+
+            def get_configuration(
+                self,
+                configuration_id,
+            ):
+                return {
+                    good_run.configuration_id: (
+                        good_configuration
+                    ),
+                    bad_run.configuration_id: (
+                        bad_configuration
+                    ),
+                }[
+                    configuration_id
+                ]
+
+        service._lifecycle = (
+            CorruptLifecycle()
+        )
+
+        response = client.get(
+            "/history"
+        )
+
+        assert response.status_code == 503
+
+        assert (
+            "Review history unavailable"
+            in response.text
+        )
+
+        assert (
+            "visible-if-partial.csv"
+            not in response.text
+        )
+
+        assert (
+            "bad-history.csv"
+            not in response.text
+        )
+
+        assert (
+            "no-store"
+            in response.headers[
+                "cache-control"
+            ]
+        )

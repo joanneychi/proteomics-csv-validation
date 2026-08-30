@@ -127,6 +127,15 @@ class RunRepository(Protocol):
     ) -> RunConfigurationRecord:
         """Return one persisted run-configuration snapshot."""
 
+    def list_runs(
+        self,
+        workspace_id: str,
+        *,
+        limit: int,
+    ) -> tuple[AnalysisRunRecord, ...]:
+        """Return newest persisted runs for one workspace."""
+        ...
+
 
 
     def get_run(
@@ -269,6 +278,36 @@ class RunLifecycleService:
     ) -> RunConfigurationRecord:
         return self.repository.get_configuration(
             configuration_id
+        )
+
+    def list_runs(
+        self,
+        workspace_id: str,
+        *,
+        limit: int,
+    ) -> tuple[AnalysisRunRecord, ...]:
+        if (
+            isinstance(
+                limit,
+                bool,
+            )
+            or not isinstance(
+                limit,
+                int,
+            )
+        ):
+            raise TypeError(
+                "limit must be an integer."
+            )
+
+        if limit <= 0:
+            raise ValueError(
+                "limit must be positive."
+            )
+
+        return self.repository.list_runs(
+            workspace_id,
+            limit=limit,
         )
 
 

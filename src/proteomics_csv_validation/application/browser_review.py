@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import json
 from hashlib import sha256
 from pathlib import Path
@@ -55,6 +56,26 @@ class ResultReader(
     ) -> bytes:
         ...
 
+
+@dataclass(
+    frozen=True,
+    slots=True,
+)
+class ReviewHistoryEntryView:
+    """Application-safe durable run-history evidence for presentation."""
+
+    run_id: str
+    configuration_id: str
+    configuration_sha256: str
+    status: str
+    created_at: str
+    started_at: str | None
+    finished_at: str | None
+    source_display_name: str
+    source_sha256: str
+    source_byte_count: int
+    profile_version: str
+    mapping_mode: str
 
 @dataclass(
     frozen=True,
@@ -1552,6 +1573,11 @@ class ReviewResultNotFound(
     """Raised when a requested durable run does not exist."""
 
 
+class ReviewHistoryUnavailable(
+    RuntimeError
+):
+    """Raised when durable History evidence cannot be trusted."""
+
 class ReviewWorkflowPort(
     Protocol
 ):
@@ -1566,6 +1592,14 @@ class ReviewWorkflowPort(
         self,
         submission: ReviewSubmission,
     ) -> str:
+        ...
+
+    def history(
+        self,
+    ) -> tuple[
+        ReviewHistoryEntryView,
+        ...,
+    ]:
         ...
 
     def result(
@@ -1811,6 +1845,331 @@ class ReviewWorkflowService:
             pass
 
         return run_id
+
+    def history(
+        self,
+    ) -> tuple[
+        ReviewHistoryEntryView,
+        ...,
+    ]:
+        runs = self._lifecycle.list_runs(
+            _WORKSPACE_ID,
+            limit=50,
+        )
+
+        entries: list[
+            ReviewHistoryEntryView
+        ] = []
+
+        for run in runs:
+            try:
+                if (
+                    run.workspace_id
+                    != _WORKSPACE_ID
+                ):
+                    raise ValueError(
+                        "History run workspace is inconsistent."
+                    )
+
+                configuration = (
+                    self._lifecycle
+                    .get_configuration(
+                        run.configuration_id
+                    )
+                )
+
+                if (
+                    configuration.configuration_id
+                    != run.configuration_id
+                ):
+                    raise ValueError(
+                        "History configuration identity is inconsistent."
+                    )
+
+                if (
+                    configuration.workspace_id
+                    != run.workspace_id
+                ):
+                    raise ValueError(
+                        "History configuration workspace is inconsistent."
+                    )
+
+                actual_configuration_sha = (
+                    hashlib.sha256(
+                        configuration.canonical_json.encode(
+                            "utf-8"
+                        )
+                    ).hexdigest()
+                )
+
+                if (
+                    actual_configuration_sha
+                    != configuration.sha256
+                ):
+                    raise ValueError(
+                        "History configuration checksum is inconsistent."
+                    )
+
+                document = json.loads(
+                    configuration.canonical_json
+                )
+
+                if not isinstance(
+                    document,
+                    dict,
+                ):
+                    raise ValueError(
+                        "History configuration must be an object."
+                    )
+
+                required_keys = {
+                    "mapping_mode",
+                    "profile_version",
+                    "source",
+                }
+
+                allowed_keys = (
+                    required_keys
+                    | {
+                        "column_mapping_source",
+                    }
+                )
+
+                if (
+                    not required_keys.issubset(
+                        document
+                    )
+                    or not set(
+                        document
+                    ).issubset(
+                        allowed_keys
+                    )
+                ):
+                    raise ValueError(
+                        "History configuration shape is invalid."
+                    )
+
+                profile_version = (
+                    document[
+                        "profile_version"
+                    ]
+                )
+
+                if (
+                    not isinstance(
+                        profile_version,
+                        str,
+                    )
+                    or not profile_version
+                    or len(
+                        profile_version.split(
+                            "."
+                        )
+                    ) != 3
+                    or not all(
+                        part.isdigit()
+                        for part in profile_version.split(
+                            "."
+                        )
+                    )
+                ):
+                    raise ValueError(
+                        "History profile identity is invalid."
+                    )
+
+                mapping_mode = (
+                    document[
+                        "mapping_mode"
+                    ]
+                )
+
+                if mapping_mode not in {
+                    "strict",
+                    "automatic",
+                    "explicit",
+                }:
+                    raise ValueError(
+                        "History mapping mode is invalid."
+                    )
+
+                def source_evidence(
+                    value: object,
+                ) -> SourceFileEvidence:
+                    if not isinstance(
+                        value,
+                        dict,
+                    ):
+                        raise ValueError(
+                            "History source evidence is invalid."
+                        )
+
+                    if set(
+                        value
+                    ) != {
+                        "byte_count",
+                        "display_name",
+                        "sha256",
+                    }:
+                        raise ValueError(
+                            "History source evidence shape is invalid."
+                        )
+
+                    display_name = value[
+                        "display_name"
+                    ]
+
+                    digest = value[
+                        "sha256"
+                    ]
+
+                    byte_count = value[
+                        "byte_count"
+                    ]
+
+                    if (
+                        not isinstance(
+                            display_name,
+                            str,
+                        )
+                        or not display_name
+                        or "/"
+                        in display_name
+                        or "\\"
+                        in display_name
+                        or any(
+                            ord(
+                                character
+                            ) < 32
+                            or ord(
+                                character
+                            ) == 127
+                            for character
+                            in display_name
+                        )
+                    ):
+                        raise ValueError(
+                            "History source display name is invalid."
+                        )
+
+                    if (
+                        not isinstance(
+                            digest,
+                            str,
+                        )
+                        or len(
+                            digest
+                        ) != 64
+                    ):
+                        raise ValueError(
+                            "History source checksum is invalid."
+                        )
+
+                    try:
+                        bytes.fromhex(
+                            digest
+                        )
+
+                    except ValueError as error:
+                        raise ValueError(
+                            "History source checksum is invalid."
+                        ) from error
+
+                    if (
+                        isinstance(
+                            byte_count,
+                            bool,
+                        )
+                        or not isinstance(
+                            byte_count,
+                            int,
+                        )
+                        or byte_count < 0
+                    ):
+                        raise ValueError(
+                            "History source byte count is invalid."
+                        )
+
+                    return SourceFileEvidence(
+                        display_name=display_name,
+                        sha256=digest,
+                        byte_count=byte_count,
+                    )
+
+                source = source_evidence(
+                    document[
+                        "source"
+                    ]
+                )
+
+                has_mapping_source = (
+                    "column_mapping_source"
+                    in document
+                )
+
+                if (
+                    mapping_mode
+                    == "explicit"
+                ):
+                    if not has_mapping_source:
+                        raise ValueError(
+                            "Explicit History configuration lacks mapping evidence."
+                        )
+
+                    source_evidence(
+                        document[
+                            "column_mapping_source"
+                        ]
+                    )
+
+                elif has_mapping_source:
+                    raise ValueError(
+                        "Non-explicit History configuration has unexpected mapping evidence."
+                    )
+
+                entries.append(
+                    ReviewHistoryEntryView(
+                        run_id=run.run_id,
+                        configuration_id=(
+                            run.configuration_id
+                        ),
+                        configuration_sha256=(
+                            configuration.sha256
+                        ),
+                        status=run.status.value,
+                        created_at=run.created_at,
+                        started_at=run.started_at,
+                        finished_at=run.finished_at,
+                        source_display_name=(
+                            source.display_name
+                        ),
+                        source_sha256=(
+                            source.sha256
+                        ),
+                        source_byte_count=(
+                            source.byte_count
+                        ),
+                        profile_version=(
+                            profile_version
+                        ),
+                        mapping_mode=(
+                            mapping_mode
+                        ),
+                    )
+                )
+
+            except (
+                LedgerRecordNotFoundError,
+                json.JSONDecodeError,
+                TypeError,
+                ValueError,
+            ) as error:
+                raise ReviewHistoryUnavailable(
+                    "History evidence is unavailable."
+                ) from error
+
+        return tuple(
+            entries
+        )
 
     def result(
         self,

@@ -30,6 +30,7 @@ from proteomics_csv_validation.application.browser_review import (
     ReviewSubmission,
     ReviewSubmissionError,
     ReviewWorkflowPort,
+    ReviewHistoryUnavailable,
 )
 from proteomics_csv_validation.web.csrf import (
     issue_csrf_token,
@@ -973,6 +974,77 @@ def install_review_routes(
                 )
 
             raise
+
+    @app.get(
+        "/history",
+        include_in_schema=False,
+    )
+    async def review_history(
+        request: Request,
+    ) -> Response:
+        unavailable = False
+
+        try:
+            entries = workflow.history()
+
+        except ReviewHistoryUnavailable:
+            entries = ()
+            unavailable = True
+
+        history_rows = tuple(
+            {
+                "run_id": entry.run_id,
+                "configuration_id": (
+                    entry.configuration_id
+                ),
+                "configuration_sha256": (
+                    entry.configuration_sha256
+                ),
+                "status": entry.status,
+                "created_at": entry.created_at,
+                "started_at": entry.started_at,
+                "finished_at": entry.finished_at,
+                "source_display_name": (
+                    entry.source_display_name
+                ),
+                "source_sha256": (
+                    entry.source_sha256
+                ),
+                "source_byte_count": (
+                    entry.source_byte_count
+                ),
+                "profile_version": (
+                    entry.profile_version
+                ),
+                "mapping_mode": (
+                    entry.mapping_mode
+                ),
+            }
+            for entry in entries
+        )
+
+        response = templates.TemplateResponse(
+            request=request,
+            name="history.html",
+            context={
+                "request": request,
+                "history": history_rows,
+                "history_unavailable": (
+                    unavailable
+                ),
+            },
+            status_code=(
+                503
+                if unavailable
+                else 200
+            ),
+        )
+
+        response.headers[
+            "Cache-Control"
+        ] = "no-store"
+
+        return response
 
     @app.get(
         "/results/{run_id}",

@@ -20,6 +20,7 @@ from proteomics_csv_validation.application.browser_review import (
     ReviewSubmission,
     ReviewWorkflowPort,
     ReviewWorkflowService,
+    ReviewHistoryEntryView,
 )
 from proteomics_csv_validation.application.publication import (
     PublicationService,
@@ -161,6 +162,14 @@ class _LazyReviewWorkflow:
         return self._get_service().submit(
             submission
         )
+
+    def history(
+        self,
+    ) -> tuple[
+        ReviewHistoryEntryView,
+        ...,
+    ]:
+        return self._get_service().history()
 
     def result(
         self,

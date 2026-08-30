@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block title %}Review history · Proteomics CSV Validation{% endblock %}
+
+{% block content %}
+<section
+  class="page-heading"
+  aria-labelledby="history-title"
+>
+  <p class="eyebrow">
+    Durable review history
+  </p>
+
+  <h1 id="history-title">
+    Review history
+  </h1>
+
+  <p>
+    Recent locally persisted review runs are shown newest first.
+  </p>
+</section>
+
+{% if history_unavailable %}
+<section
+  class="error-summary"
+  role="alert"
+  aria-labelledby="history-unavailable-title"
+>
+  <h2 id="history-unavailable-title">
+    Review history unavailable
+  </h2>
+
+  <p>
+    Durable history evidence could not be verified. No partially trusted
+    history details are shown.
+  </p>
+</section>
+
+{% elif not history %}
+<section
+  class="result-panel"
+  aria-labelledby="empty-history-title"
+>
+  <h2 id="empty-history-title">
+    No review runs are available yet
+  </h2>
+
+  <p>
+    Completed or pending local review runs will appear here after they are
+    persisted.
+  </p>
+</section>
+
+{% else %}
+{% for entry in history %}
+<section
+  class="result-panel"
+  aria-labelledby="history-run-{{ loop.index }}"
+>
+  <h2 id="history-run-{{ loop.index }}">
+    {{ entry.source_display_name }}
+  </h2>
+
+  <dl class="evidence-grid">
+    <div>
+      <dt>Status</dt>
+      <dd>{{ entry.status }}</dd>
+    </div>
+
+    <div>
+      <dt>Created</dt>
+      <dd>{{ entry.created_at }}</dd>
+    </div>
+
+    {% if entry.started_at %}
+    <div>
+      <dt>Started</dt>
+      <dd>{{ entry.started_at }}</dd>
+    </div>
+    {% endif %}
+
+    {% if entry.finished_at %}
+    <div>
+      <dt>Finished</dt>
+      <dd>{{ entry.finished_at }}</dd>
+    </div>
+    {% endif %}
+
+    <div>
+      <dt>Run ID</dt>
+      <dd><code>{{ entry.run_id }}</code></dd>
+    </div>
+
+    <div>
+      <dt>Configuration ID</dt>
+      <dd><code>{{ entry.configuration_id }}</code></dd>
+    </div>
+
+    <div>
+      <dt>Configuration SHA-256</dt>
+      <dd><code>{{ entry.configuration_sha256 }}</code></dd>
+    </div>
+
+    <div>
+      <dt>Profile version</dt>
+      <dd>{{ entry.profile_version }}</dd>
+    </div>
+
+    <div>
+      <dt>Mapping mode</dt>
+      <dd>{{ entry.mapping_mode }}</dd>
+    </div>
+
+    <div>
+      <dt>Source SHA-256</dt>
+      <dd><code>{{ entry.source_sha256 }}</code></dd>
+    </div>
+
+    <div>
+      <dt>Source bytes</dt>
+      <dd>{{ entry.source_byte_count }}</dd>
+    </div>
+  </dl>
+
+  <p class="page-actions">
+    <a href="/results/{{ entry.run_id }}">
+      Open run record
+    </a>
+  </p>
+</section>
+{% endfor %}
+{% endif %}
+
+<p class="page-actions">
+  <a href="/review">
+    Run another review
+  </a>
+</p>
+{% endblock %}

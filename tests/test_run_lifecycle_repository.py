@@ -1122,3 +1122,346 @@ def test_missing_configuration_raises(
         service.get_configuration(
             "missing"
         )
+
+
+def _history_candidate_service(
+    tmp_path,
+    *,
+    constant_time: bool = False,
+):
+    from proteomics_csv_validation.application.run_lifecycle import (
+        RunLifecycleService,
+    )
+    from proteomics_csv_validation.infrastructure.sqlite import (
+        initialize_ledger,
+    )
+    from proteomics_csv_validation.infrastructure.sqlite.run_repository import (
+        SQLiteRunRepository,
+    )
+
+    database = (
+        tmp_path
+        / "history-ledger.sqlite3"
+    )
+
+    initialize_ledger(
+        database
+    )
+
+    if constant_time:
+        def clock() -> str:
+            return "2026-01-01T00:00:00Z"
+
+    else:
+        counter = {
+            "value": 0,
+        }
+
+        def clock() -> str:
+            value = counter[
+                "value"
+            ]
+
+            counter[
+                "value"
+            ] += 1
+
+            return (
+                "2026-01-01T00:"
+                + f"{value:02d}"
+                + ":00Z"
+            )
+
+    repository = SQLiteRunRepository(
+        database
+    )
+
+    return (
+        repository,
+        RunLifecycleService(
+            repository,
+            clock,
+        ),
+    )
+
+
+def _history_candidate_configuration(
+    filename: str,
+) -> str:
+    import hashlib
+    import json
+
+    document = {
+        "mapping_mode": "strict",
+        "profile_version": "0.2.0",
+        "source": {
+            "byte_count": 1,
+            "display_name": filename,
+            "sha256": hashlib.sha256(
+                filename.encode(
+                    "utf-8"
+                )
+            ).hexdigest(),
+        },
+    }
+
+    return json.dumps(
+        document,
+        sort_keys=True,
+        separators=(
+            ",",
+            ":",
+        ),
+    )
+
+
+def _history_candidate_add_run(
+    service,
+    *,
+    workspace_id: str,
+    run_id: str,
+    configuration_id: str,
+    filename: str,
+) -> None:
+    service.snapshot_configuration(
+        configuration_id,
+        workspace_id,
+        _history_candidate_configuration(
+            filename
+        ),
+    )
+
+    service.queue_run(
+        run_id,
+        workspace_id,
+        configuration_id,
+    )
+
+
+def test_list_runs_empty_workspace_returns_immutable_empty_tuple(
+    tmp_path,
+) -> None:
+    _, service = _history_candidate_service(
+        tmp_path
+    )
+
+    service.ensure_workspace(
+        "history-empty"
+    )
+
+    observed = service.list_runs(
+        "history-empty",
+        limit=50,
+    )
+
+    assert observed == ()
+    assert isinstance(
+        observed,
+        tuple,
+    )
+
+
+def test_list_runs_is_workspace_scoped_and_newest_first(
+    tmp_path,
+) -> None:
+    _, service = _history_candidate_service(
+        tmp_path
+    )
+
+    for workspace_id in (
+        "history-a",
+        "history-b",
+    ):
+        service.ensure_workspace(
+            workspace_id
+        )
+
+    _history_candidate_add_run(
+        service,
+        workspace_id="history-a",
+        run_id="1" * 32,
+        configuration_id="a" * 32,
+        filename="older.csv",
+    )
+
+    _history_candidate_add_run(
+        service,
+        workspace_id="history-b",
+        run_id="9" * 32,
+        configuration_id="f" * 32,
+        filename="other.csv",
+    )
+
+    _history_candidate_add_run(
+        service,
+        workspace_id="history-a",
+        run_id="2" * 32,
+        configuration_id="b" * 32,
+        filename="newer.csv",
+    )
+
+    observed = service.list_runs(
+        "history-a",
+        limit=50,
+    )
+
+    assert tuple(
+        run.run_id
+        for run in observed
+    ) == (
+        "2" * 32,
+        "1" * 32,
+    )
+
+    assert all(
+        run.workspace_id
+        == "history-a"
+        for run in observed
+    )
+
+
+def test_list_runs_uses_run_id_as_deterministic_tie_break(
+    tmp_path,
+) -> None:
+    _, service = _history_candidate_service(
+        tmp_path,
+        constant_time=True,
+    )
+
+    service.ensure_workspace(
+        "history-tie"
+    )
+
+    _history_candidate_add_run(
+        service,
+        workspace_id="history-tie",
+        run_id="a" * 32,
+        configuration_id="1" * 32,
+        filename="a.csv",
+    )
+
+    _history_candidate_add_run(
+        service,
+        workspace_id="history-tie",
+        run_id="b" * 32,
+        configuration_id="2" * 32,
+        filename="b.csv",
+    )
+
+    observed = service.list_runs(
+        "history-tie",
+        limit=50,
+    )
+
+    assert tuple(
+        run.run_id
+        for run in observed
+    ) == (
+        "b" * 32,
+        "a" * 32,
+    )
+
+    assert (
+        observed[
+            0
+        ].created_at
+        == observed[
+            1
+        ].created_at
+    )
+
+
+def test_list_runs_enforces_bound(
+    tmp_path,
+) -> None:
+    _, service = _history_candidate_service(
+        tmp_path
+    )
+
+    service.ensure_workspace(
+        "history-limit"
+    )
+
+    for index in range(
+        4
+    ):
+        _history_candidate_add_run(
+            service,
+            workspace_id="history-limit",
+            run_id=(
+                f"{index + 1:x}"
+                * 32
+            ),
+            configuration_id=(
+                f"{index + 10:x}"
+                * 32
+            ),
+            filename=(
+                "history-"
+                + str(
+                    index
+                )
+                + ".csv"
+            ),
+        )
+
+    observed = service.list_runs(
+        "history-limit",
+        limit=2,
+    )
+
+    assert len(
+        observed
+    ) == 2
+
+    assert tuple(
+        run.run_id
+        for run in observed
+    ) == (
+        "4" * 32,
+        "3" * 32,
+    )
+
+
+def test_list_runs_rejects_invalid_limit(
+    tmp_path,
+) -> None:
+    import pytest
+
+    repository, service = (
+        _history_candidate_service(
+            tmp_path
+        )
+    )
+
+    service.ensure_workspace(
+        "history-invalid"
+    )
+
+    for target in (
+        service,
+        repository,
+    ):
+        for value in (
+            0,
+            -1,
+        ):
+            with pytest.raises(
+                ValueError
+            ):
+                target.list_runs(
+                    "history-invalid",
+                    limit=value,
+                )
+
+        for value in (
+            True,
+            "1",
+        ):
+            with pytest.raises(
+                TypeError
+            ):
+                target.list_runs(
+                    "history-invalid",
+                    limit=value,
+                )
