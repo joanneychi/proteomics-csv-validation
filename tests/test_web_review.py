@@ -1485,3 +1485,661 @@ def test_ingestion_stop_status_is_visible_and_distinct_from_execution_success(
             "validation stopped after ingestion finding"
             not in visible
         )
+
+
+def test_detailed_baseline_result_exposes_verified_source_configuration_and_restart(
+    tmp_path: Path,
+) -> None:
+    from hashlib import sha256
+
+    data_root = (
+        tmp_path
+        / "detailed-baseline"
+    ).resolve()
+
+    source_bytes = (
+        _BASELINE.read_bytes()
+    )
+
+    expected_sha = sha256(
+        source_bytes
+    ).hexdigest()
+
+    with TestClient(
+        create_app(
+            data_root=data_root,
+            csrf_secret=_SECRET,
+        ),
+        base_url=_ORIGIN,
+    ) as client:
+        response = _submit(
+            client,
+            _BASELINE,
+        )
+
+        assert response.status_code == 303
+
+        location = response.headers[
+            "location"
+        ]
+
+        result = client.get(
+            location
+        )
+
+        assert result.status_code == 200
+
+        visible = _visible_text(
+            result.text
+        )
+
+        for required in (
+            "Source evidence",
+            "baseline_valid.csv",
+            expected_sha,
+            str(
+                len(
+                    source_bytes
+                )
+            ),
+            "Selected configuration",
+            "Profile version",
+            "0.2.0",
+            "Mapping mode",
+            "strict",
+            "Validation identity",
+            "Summary counts",
+            "Configured rules",
+            "Column mapping",
+            "Individual findings",
+            "No individual findings were emitted",
+            "Result artifact evidence",
+        ):
+            assert required in visible
+
+        assert str(
+            data_root
+        ) not in result.text
+
+        assert str(
+            tmp_path
+        ) not in result.text
+
+    restarted = create_app(
+        data_root=data_root,
+        csrf_secret=_SECRET,
+    )
+
+    with TestClient(
+        restarted,
+        base_url=_ORIGIN,
+    ) as client:
+        result = client.get(
+            location
+        )
+
+        assert result.status_code == 200
+
+        visible = _visible_text(
+            result.text
+        )
+
+        assert (
+            "baseline_valid.csv"
+            in visible
+        )
+
+        assert (
+            expected_sha
+            in visible
+        )
+
+        assert (
+            "0 structural findings"
+            in visible
+        )
+
+
+def test_detailed_seeded_result_exposes_four_reconciled_findings(
+    tmp_path: Path,
+) -> None:
+    with TestClient(
+        _application(
+            tmp_path
+        ),
+        base_url=_ORIGIN,
+    ) as client:
+        response = _submit(
+            client,
+            _SEEDED,
+        )
+
+        assert response.status_code == 303
+
+        result = client.get(
+            response.headers[
+                "location"
+            ]
+        )
+
+        assert result.status_code == 200
+
+        visible = _visible_text(
+            result.text
+        )
+
+        assert (
+            "4 structural findings"
+            in visible
+        )
+
+        assert (
+            visible.count(
+                "SCHEMA_MISSING_REQUIRED_COLUMN"
+            )
+            >= 1
+        )
+
+        assert (
+            visible.count(
+                "IDENTIFIER_DUPLICATE_SAMPLE_ID"
+            )
+            >= 2
+        )
+
+        assert (
+            visible.count(
+                "IDENTIFIER_MISSING_SAMPLE_ID"
+            )
+            >= 1
+        )
+
+        for rule_id in (
+            "ingestion.input_limits",
+            "ingestion.csv_parse",
+            "schema.required_column",
+            "identifier.sample_id_required",
+            "identifier.sample_id_unique",
+            "missingness.required_value",
+        ):
+            assert rule_id in visible
+
+        for heading in (
+            "Summary counts",
+            "By category",
+            "By code",
+            "By severity",
+            "By scope",
+            "Individual findings",
+        ):
+            assert heading in visible
+
+
+def test_detailed_required_value_result_exposes_missingness_findings(
+    tmp_path: Path,
+) -> None:
+    source = (
+        _ROOT
+        / "data"
+        / "synthetic"
+        / "required_value_missing_values.csv"
+    )
+
+    assert source.is_file()
+
+    with TestClient(
+        _application(
+            tmp_path
+        ),
+        base_url=_ORIGIN,
+    ) as client:
+        response = _submit(
+            client,
+            source,
+        )
+
+        assert response.status_code == 303
+
+        result = client.get(
+            response.headers[
+                "location"
+            ]
+        )
+
+        assert result.status_code == 200
+
+        visible = _visible_text(
+            result.text
+        )
+
+        assert (
+            "3 structural findings"
+            in visible
+        )
+
+        assert (
+            visible.count(
+                "MISSINGNESS_REQUIRED_VALUE"
+            )
+            >= 3
+        )
+
+        assert (
+            "missingness.required_value"
+            in visible
+        )
+
+        assert (
+            "experimental_condition"
+            in visible
+        )
+
+        assert (
+            "sample_preparation_batch"
+            in visible
+        )
+
+        assert (
+            "protein_group_intensity_sum"
+            in visible
+        )
+
+
+def test_detailed_explicit_mapping_result_exposes_mapping_evidence(
+    tmp_path: Path,
+) -> None:
+    baseline_lines = (
+        _BASELINE
+        .read_text(
+            encoding="utf-8"
+        )
+        .splitlines()
+    )
+
+    assert baseline_lines
+
+    baseline_lines[
+        0
+    ] = (
+        "study_id,"
+        "Sample Name,"
+        "Condition,"
+        "sample_preparation_batch,"
+        "quantified_protein_group_count,"
+        "protein_group_intensity_sum"
+    )
+
+    source_bytes = (
+        (
+            "\n".join(
+                baseline_lines
+            )
+            + "\n"
+        )
+        .encode(
+            "utf-8"
+        )
+    )
+
+    mapping_document = {
+        "mapping_specification_version": (
+            "1.0.0"
+        ),
+        "columns": {
+            "sample_id": (
+                "Sample Name"
+            ),
+            "experimental_condition": (
+                "Condition"
+            ),
+        },
+    }
+
+    mapping_bytes = (
+        json.dumps(
+            mapping_document,
+            sort_keys=True,
+            separators=(
+                ",",
+                ":",
+            ),
+        )
+        .encode(
+            "utf-8"
+        )
+    )
+
+    with TestClient(
+        _application(
+            tmp_path
+        ),
+        base_url=_ORIGIN,
+    ) as client:
+        token = _csrf(
+            client
+        )
+
+        response = client.post(
+            "/reviews",
+            data={
+                "csrf_token": token,
+                "profile_version": (
+                    "0.2.0"
+                ),
+                "mapping_mode": (
+                    "explicit"
+                ),
+            },
+            files={
+                "input_file": (
+                    "explicit_alias.csv",
+                    source_bytes,
+                    "text/csv",
+                ),
+                "mapping_file": (
+                    "mapping.json",
+                    mapping_bytes,
+                    "application/json",
+                ),
+            },
+            headers={
+                "Origin": _ORIGIN,
+                "Sec-Fetch-Site": (
+                    "same-origin"
+                ),
+            },
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 303
+
+        result = client.get(
+            response.headers[
+                "location"
+            ]
+        )
+
+        assert result.status_code == 200
+
+        visible = _visible_text(
+            result.text
+        )
+
+        for required in (
+            "explicit_alias.csv",
+            "Mapping source evidence",
+            "mapping.json",
+            "Mapping mode explicit",
+            "Sample Name",
+            "sample_id",
+            "Condition",
+            "experimental_condition",
+            "1.0.0",
+        ):
+            assert required in visible
+
+        assert (
+            "0 structural findings"
+            in visible
+        )
+
+
+def test_detailed_result_escapes_source_name_and_does_not_leak_private_path(
+    tmp_path: Path,
+) -> None:
+    data_root = (
+        tmp_path
+        / "escape-result"
+    ).resolve()
+
+    with TestClient(
+        create_app(
+            data_root=data_root,
+            csrf_secret=_SECRET,
+        ),
+        base_url=_ORIGIN,
+    ) as client:
+        response = _submit(
+            client,
+            _BASELINE,
+            filename=(
+                "<source&name>.csv"
+            ),
+        )
+
+        assert response.status_code == 303
+
+        result = client.get(
+            response.headers[
+                "location"
+            ]
+        )
+
+        assert result.status_code == 200
+
+        assert (
+            "&lt;source&amp;name&gt;.csv"
+            in result.text
+        )
+
+        assert (
+            "<source&name>.csv"
+            not in result.text
+        )
+
+        assert (
+            str(
+                tmp_path
+            )
+            not in result.text
+        )
+
+        assert (
+            str(
+                data_root
+            )
+            not in result.text
+        )
+
+
+def test_detailed_result_fails_closed_when_verified_artifact_is_corrupted(
+    tmp_path: Path,
+) -> None:
+    data_root = (
+        tmp_path
+        / "corrupt-evidence"
+    ).resolve()
+
+    with TestClient(
+        create_app(
+            data_root=data_root,
+            csrf_secret=_SECRET,
+        ),
+        base_url=_ORIGIN,
+    ) as client:
+        response = _submit(
+            client,
+            _SEEDED,
+        )
+
+        assert response.status_code == 303
+
+        location = response.headers[
+            "location"
+        ]
+
+        run_id = location.rsplit(
+            "/",
+            1,
+        )[-1]
+
+    with sqlite3.connect(
+        data_root
+        / "ledger.sqlite3"
+    ) as connection:
+        row = connection.execute(
+            """
+            SELECT relative_path
+            FROM run_artifact
+            WHERE run_id = ?
+              AND kind = 'RESULT_BUNDLE'
+            """,
+            (
+                run_id,
+            ),
+        ).fetchone()
+
+    assert row is not None
+
+    artifact_path = (
+        data_root
+        / "artifacts"
+        / row[
+            0
+        ]
+    )
+
+    assert artifact_path.is_file()
+
+    artifact_path.write_bytes(
+        b"{}\n"
+    )
+
+    restarted = create_app(
+        data_root=data_root,
+        csrf_secret=_SECRET,
+    )
+
+    with TestClient(
+        restarted,
+        base_url=_ORIGIN,
+    ) as client:
+        result = client.get(
+            location
+        )
+
+        assert result.status_code == 503
+
+        visible = _visible_text(
+            result.text
+        )
+
+        assert (
+            "Result evidence publication unavailable"
+            in visible
+        )
+
+        assert (
+            "Detailed result evidence is withheld"
+            in visible
+        )
+
+        assert (
+            "SCHEMA_MISSING_REQUIRED_COLUMN"
+            not in visible
+        )
+
+        assert (
+            "seeded_errors.csv"
+            not in visible
+        )
+
+
+def test_detailed_mapping_evidence_rejects_impossible_domain_states() -> None:
+    from copy import deepcopy
+
+    from proteomics_csv_validation.application.browser_review import (
+        _mapping_view,
+    )
+
+    valid = {
+        "specification_version": "1.0.0",
+        "mode": "explicit",
+        "resolution_completed": True,
+        "entries": [
+            {
+                "source_field": "Sample Name",
+                "target_field": "sample_id",
+            },
+            {
+                "source_field": "Condition",
+                "target_field": "experimental_condition",
+            },
+        ],
+    }
+
+    accepted = _mapping_view(
+        deepcopy(
+            valid
+        )
+    )
+
+    assert len(
+        accepted.entries
+    ) == 2
+
+    duplicate_target = deepcopy(
+        valid
+    )
+
+    duplicate_target[
+        "entries"
+    ][
+        1
+    ][
+        "target_field"
+    ] = "sample_id"
+
+    duplicate_source = deepcopy(
+        valid
+    )
+
+    duplicate_source[
+        "entries"
+    ][
+        1
+    ][
+        "source_field"
+    ] = "Sample Name"
+
+    identity_mapping = deepcopy(
+        valid
+    )
+
+    identity_mapping[
+        "entries"
+    ][
+        0
+    ] = {
+        "source_field": "sample_id",
+        "target_field": "sample_id",
+    }
+
+    incomplete_with_entries = deepcopy(
+        valid
+    )
+
+    incomplete_with_entries[
+        "resolution_completed"
+    ] = False
+
+    attacks = {
+        "duplicate_target": duplicate_target,
+        "duplicate_source": duplicate_source,
+        "identity_mapping": identity_mapping,
+        "incomplete_with_entries": incomplete_with_entries,
+    }
+
+    for label, document in attacks.items():
+        try:
+            _mapping_view(
+                document
+            )
+
+        except ValueError:
+            continue
+
+        raise AssertionError(
+            "Impossible mapping evidence was accepted: "
+            + label
+        )

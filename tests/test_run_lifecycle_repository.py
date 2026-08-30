@@ -1047,3 +1047,78 @@ def test_service_forwards_expected_revision_and_clock(
 
     assert revised.revision == 2
     assert revised.updated_at == T2
+
+
+def test_get_configuration_round_trip(
+    tmp_path: Path,
+) -> None:
+    repository = _repository(
+        tmp_path
+    )
+
+    repository.ensure_workspace(
+        "workspace",
+        created_at=T0,
+    )
+
+    canonical_json = (
+        '{"mapping_mode":"strict",'
+        '"profile_version":"0.2.0"}'
+    )
+
+    stored = (
+        repository.snapshot_configuration(
+            "configuration",
+            "workspace",
+            canonical_json,
+            created_at=T1,
+        )
+    )
+
+    assert (
+        repository.get_configuration(
+            "configuration"
+        )
+        == stored
+    )
+
+    service = RunLifecycleService(
+        repository=repository,
+        clock=lambda: T2,
+    )
+
+    assert (
+        service.get_configuration(
+            "configuration"
+        )
+        == stored
+    )
+
+
+def test_missing_configuration_raises(
+    tmp_path: Path,
+) -> None:
+    repository = _repository(
+        tmp_path
+    )
+
+    with pytest.raises(
+        LedgerRecordNotFoundError,
+        match="Run configuration does not exist",
+    ):
+        repository.get_configuration(
+            "missing"
+        )
+
+    service = RunLifecycleService(
+        repository=repository,
+        clock=lambda: T0,
+    )
+
+    with pytest.raises(
+        LedgerRecordNotFoundError,
+        match="Run configuration does not exist",
+    ):
+        service.get_configuration(
+            "missing"
+        )

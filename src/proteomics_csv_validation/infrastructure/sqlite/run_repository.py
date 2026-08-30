@@ -1034,6 +1034,33 @@ class SQLiteRunRepository:
         finally:
             connection.close()
 
+    def get_configuration(
+        self,
+        configuration_id: str,
+    ) -> RunConfigurationRecord:
+        connection = _connect(
+            self.database_path
+        )
+
+        try:
+            record = _select_configuration(
+                connection,
+                configuration_id,
+            )
+
+            if record is None:
+                raise LedgerRecordNotFoundError(
+                    "Run configuration does not exist: "
+                    + configuration_id
+                )
+
+            return record
+
+        finally:
+            connection.close()
+
+
+
     def get_run(
         self,
         run_id: str,

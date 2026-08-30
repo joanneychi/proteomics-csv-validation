@@ -1048,6 +1048,12 @@ def install_review_routes(
                 "evidence_available": (
                     view.evidence_available
                 ),
+                "configuration": (
+                    view.configuration
+                ),
+                "validation": (
+                    view.validation
+                ),
             },
         }
 

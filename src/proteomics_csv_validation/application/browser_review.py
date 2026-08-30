@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+from hashlib import sha256
 from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
@@ -26,6 +27,8 @@ from proteomics_csv_validation.application.structural_review import (
 )
 from proteomics_csv_validation.domain.result_artifact import (
     RESULT_BUNDLE_ARTIFACT_KIND,
+    RESULT_BUNDLE_SCHEMA_ID,
+    RESULT_BUNDLE_SCHEMA_VERSION,
     ResultBundleConfiguration,
     ResultStoreError,
     SourceFileEvidence,
@@ -76,6 +79,1431 @@ class ReviewSubmission:
     frozen=True,
     slots=True,
 )
+class ResultRuleView:
+    """Presentation-safe configured-rule identity."""
+
+    rule_id: str
+    rule_version: str
+
+
+@dataclass(
+    frozen=True,
+    slots=True,
+)
+class ResultFileEvidenceView:
+    """Presentation-safe submitted-file evidence."""
+
+    display_name: str
+    sha256: str
+    byte_count: int
+
+
+@dataclass(
+    frozen=True,
+    slots=True,
+)
+class ResultTaggedValueView:
+    """Typed finding value rendered without exposing implementation objects."""
+
+    value_type: str
+    display_value: str
+
+
+@dataclass(
+    frozen=True,
+    slots=True,
+)
+class ResultLocationView:
+    """Presentation-safe source location."""
+
+    row_number: int | None
+    field_name: str | None
+
+
+@dataclass(
+    frozen=True,
+    slots=True,
+)
+class ResultEntityKeyPartView:
+    """One stable entity-key component."""
+
+    field_name: str
+    value: ResultTaggedValueView
+
+
+@dataclass(
+    frozen=True,
+    slots=True,
+)
+class ResultEntityView:
+    """Presentation-safe finding entity."""
+
+    entity_type: str
+    key_parts: tuple[
+        ResultEntityKeyPartView,
+        ...,
+    ]
+
+
+@dataclass(
+    frozen=True,
+    slots=True,
+)
+class ResultFindingView:
+    """One fully reconciled structural finding."""
+
+    code: str
+    category: str
+    severity: str
+    scope: str
+    rule: ResultRuleView
+    location: ResultLocationView
+    entity: ResultEntityView | None
+    observed_value: ResultTaggedValueView
+    expected_value: ResultTaggedValueView
+    message: str
+
+
+@dataclass(
+    frozen=True,
+    slots=True,
+)
+class ResultCountView:
+    """One reconciled summary count."""
+
+    label: str
+    count: int
+
+
+@dataclass(
+    frozen=True,
+    slots=True,
+)
+class ResultSummaryView:
+    """Reconciled finding summary."""
+
+    total_findings: int
+    category_counts: tuple[
+        ResultCountView,
+        ...,
+    ]
+    code_counts: tuple[
+        ResultCountView,
+        ...,
+    ]
+    severity_counts: tuple[
+        ResultCountView,
+        ...,
+    ]
+    scope_counts: tuple[
+        ResultCountView,
+        ...,
+    ]
+
+
+@dataclass(
+    frozen=True,
+    slots=True,
+)
+class ResultMappingEntryView:
+    """One resolved source-to-canonical column mapping."""
+
+    source_field: str
+    target_field: str
+
+
+@dataclass(
+    frozen=True,
+    slots=True,
+)
+class ResultColumnMappingView:
+    """Presentation-safe column-mapping evidence."""
+
+    specification_version: str
+    mode: str
+    resolution_completed: bool
+    entries: tuple[
+        ResultMappingEntryView,
+        ...,
+    ]
+
+
+@dataclass(
+    frozen=True,
+    slots=True,
+)
+class ResultConfigurationView:
+    """Reconciled immutable configuration evidence."""
+
+    profile_version: str
+    mapping_mode: str
+    source: ResultFileEvidenceView
+    column_mapping_source: (
+        ResultFileEvidenceView
+        | None
+    )
+
+
+@dataclass(
+    frozen=True,
+    slots=True,
+)
+class ResultValidationView:
+    """Fully reconciled validation evidence."""
+
+    application_version: str
+    descriptor_schema_version: str
+    profile_id: str
+    profile_version: str
+    status: str
+    rows: int
+    configured_rules: tuple[
+        ResultRuleView,
+        ...,
+    ]
+    column_mapping: ResultColumnMappingView
+    summary: ResultSummaryView
+    findings: tuple[
+        ResultFindingView,
+        ...,
+    ]
+
+
+def _exact_object(
+    value: object,
+    *,
+    keys: set[str],
+    label: str,
+) -> dict[
+    str,
+    object,
+]:
+    if not isinstance(
+        value,
+        dict,
+    ):
+        raise ValueError(
+            label
+            + " must be an object."
+        )
+
+    if set(
+        value
+    ) != keys:
+        raise ValueError(
+            label
+            + " has an unexpected shape."
+        )
+
+    return value
+
+
+def _nonempty_string(
+    value: object,
+    *,
+    label: str,
+) -> str:
+    if (
+        not isinstance(
+            value,
+            str,
+        )
+        or value == ""
+    ):
+        raise ValueError(
+            label
+            + " must be a nonempty string."
+        )
+
+    return value
+
+
+def _nonnegative_integer(
+    value: object,
+    *,
+    label: str,
+) -> int:
+    if (
+        type(
+            value
+        )
+        is not int
+        or value < 0
+    ):
+        raise ValueError(
+            label
+            + " must be a nonnegative integer."
+        )
+
+    return value
+
+
+def _file_evidence_view(
+    value: object,
+) -> ResultFileEvidenceView:
+    document = _exact_object(
+        value,
+        keys={
+            "display_name",
+            "sha256",
+            "byte_count",
+        },
+        label="File evidence",
+    )
+
+    display_name = _nonempty_string(
+        document[
+            "display_name"
+        ],
+        label="File display name",
+    )
+
+    if (
+        "/"
+        in display_name
+        or "\\"
+        in display_name
+    ):
+        raise ValueError(
+            "File evidence display name must not contain a path."
+        )
+
+    digest = _nonempty_string(
+        document[
+            "sha256"
+        ],
+        label="File SHA-256",
+    )
+
+    if (
+        len(
+            digest
+        )
+        != 64
+        or any(
+            character
+            not in "0123456789abcdef"
+            for character in digest
+        )
+    ):
+        raise ValueError(
+            "File SHA-256 is invalid."
+        )
+
+    byte_count = (
+        _nonnegative_integer(
+            document[
+                "byte_count"
+            ],
+            label="File byte count",
+        )
+    )
+
+    return ResultFileEvidenceView(
+        display_name=display_name,
+        sha256=digest,
+        byte_count=byte_count,
+    )
+
+
+def _tagged_value_view(
+    value: object,
+) -> ResultTaggedValueView:
+    document = _exact_object(
+        value,
+        keys={
+            "type",
+            "value",
+        },
+        label="Tagged value",
+    )
+
+    value_type = (
+        _nonempty_string(
+            document[
+                "type"
+            ],
+            label="Tagged-value type",
+        )
+    )
+
+    raw = document[
+        "value"
+    ]
+
+    if value_type == "null":
+        if raw is not None:
+            raise ValueError(
+                "Null tagged value has an invalid payload."
+            )
+
+        display = "null"
+
+    elif value_type == "boolean":
+        if type(
+            raw
+        ) is not bool:
+            raise ValueError(
+                "Boolean tagged value has an invalid payload."
+            )
+
+        display = (
+            "true"
+            if raw
+            else "false"
+        )
+
+    elif value_type == "integer":
+        if type(
+            raw
+        ) is not int:
+            raise ValueError(
+                "Integer tagged value has an invalid payload."
+            )
+
+        display = str(
+            raw
+        )
+
+    elif value_type in {
+        "string",
+        "decimal",
+    }:
+        if not isinstance(
+            raw,
+            str,
+        ):
+            raise ValueError(
+                "String-like tagged value has an invalid payload."
+            )
+
+        display = raw
+
+    else:
+        raise ValueError(
+            "Tagged-value type is unsupported."
+        )
+
+    return ResultTaggedValueView(
+        value_type=value_type,
+        display_value=display,
+    )
+
+
+def _rule_view(
+    value: object,
+) -> ResultRuleView:
+    document = _exact_object(
+        value,
+        keys={
+            "rule_id",
+            "rule_version",
+        },
+        label="Rule reference",
+    )
+
+    return ResultRuleView(
+        rule_id=_nonempty_string(
+            document[
+                "rule_id"
+            ],
+            label="Rule ID",
+        ),
+        rule_version=(
+            _nonempty_string(
+                document[
+                    "rule_version"
+                ],
+                label="Rule version",
+            )
+        ),
+    )
+
+
+def _location_view(
+    value: object,
+) -> ResultLocationView:
+    document = _exact_object(
+        value,
+        keys={
+            "row_number",
+            "field_name",
+        },
+        label="Finding location",
+    )
+
+    row_number = document[
+        "row_number"
+    ]
+
+    if (
+        row_number is not None
+        and (
+            type(
+                row_number
+            )
+            is not int
+            or row_number < 1
+        )
+    ):
+        raise ValueError(
+            "Finding row number is invalid."
+        )
+
+    field_name = document[
+        "field_name"
+    ]
+
+    if (
+        field_name is not None
+        and (
+            not isinstance(
+                field_name,
+                str,
+            )
+            or field_name == ""
+        )
+    ):
+        raise ValueError(
+            "Finding field name is invalid."
+        )
+
+    return ResultLocationView(
+        row_number=row_number,
+        field_name=field_name,
+    )
+
+
+def _entity_view(
+    value: object,
+) -> ResultEntityView | None:
+    if value is None:
+        return None
+
+    document = _exact_object(
+        value,
+        keys={
+            "entity_type",
+            "key_parts",
+        },
+        label="Finding entity",
+    )
+
+    raw_parts = document[
+        "key_parts"
+    ]
+
+    if not isinstance(
+        raw_parts,
+        list,
+    ):
+        raise ValueError(
+            "Finding entity key parts must be an array."
+        )
+
+    parts: list[
+        ResultEntityKeyPartView
+    ] = []
+
+    for raw_part in raw_parts:
+        part = _exact_object(
+            raw_part,
+            keys={
+                "field_name",
+                "value",
+            },
+            label="Entity key part",
+        )
+
+        parts.append(
+            ResultEntityKeyPartView(
+                field_name=(
+                    _nonempty_string(
+                        part[
+                            "field_name"
+                        ],
+                        label=(
+                            "Entity key field"
+                        ),
+                    )
+                ),
+                value=(
+                    _tagged_value_view(
+                        part[
+                            "value"
+                        ]
+                    )
+                ),
+            )
+        )
+
+    if not parts:
+        raise ValueError(
+            "Finding entity must contain at least one key part."
+        )
+
+    return ResultEntityView(
+        entity_type=(
+            _nonempty_string(
+                document[
+                    "entity_type"
+                ],
+                label="Entity type",
+            )
+        ),
+        key_parts=tuple(
+            parts
+        ),
+    )
+
+
+def _finding_view(
+    value: object,
+) -> ResultFindingView:
+    document = _exact_object(
+        value,
+        keys={
+            "code",
+            "category",
+            "severity",
+            "scope",
+            "rule",
+            "location",
+            "entity",
+            "observed_value",
+            "expected_value",
+            "message",
+        },
+        label="Finding",
+    )
+
+    category = _nonempty_string(
+        document[
+            "category"
+        ],
+        label="Finding category",
+    )
+
+    if category not in {
+        "ingestion",
+        "schema",
+        "identifier",
+        "missingness",
+    }:
+        raise ValueError(
+            "Finding category is invalid."
+        )
+
+    severity = _nonempty_string(
+        document[
+            "severity"
+        ],
+        label="Finding severity",
+    )
+
+    if severity not in {
+        "error",
+        "warning",
+        "information",
+    }:
+        raise ValueError(
+            "Finding severity is invalid."
+        )
+
+    scope = _nonempty_string(
+        document[
+            "scope"
+        ],
+        label="Finding scope",
+    )
+
+    if scope not in {
+        "file",
+        "row",
+    }:
+        raise ValueError(
+            "Finding scope is invalid."
+        )
+
+    return ResultFindingView(
+        code=_nonempty_string(
+            document[
+                "code"
+            ],
+            label="Finding code",
+        ),
+        category=category,
+        severity=severity,
+        scope=scope,
+        rule=_rule_view(
+            document[
+                "rule"
+            ]
+        ),
+        location=_location_view(
+            document[
+                "location"
+            ]
+        ),
+        entity=_entity_view(
+            document[
+                "entity"
+            ]
+        ),
+        observed_value=(
+            _tagged_value_view(
+                document[
+                    "observed_value"
+                ]
+            )
+        ),
+        expected_value=(
+            _tagged_value_view(
+                document[
+                    "expected_value"
+                ]
+            )
+        ),
+        message=_nonempty_string(
+            document[
+                "message"
+            ],
+            label="Finding message",
+        ),
+    )
+
+
+def _count_views(
+    value: object,
+    *,
+    label_key: str,
+    label: str,
+) -> tuple[
+    ResultCountView,
+    ...,
+]:
+    if not isinstance(
+        value,
+        list,
+    ):
+        raise ValueError(
+            label
+            + " must be an array."
+        )
+
+    result: list[
+        ResultCountView
+    ] = []
+
+    seen: set[
+        str
+    ] = set()
+
+    for raw in value:
+        document = _exact_object(
+            raw,
+            keys={
+                label_key,
+                "count",
+            },
+            label=label,
+        )
+
+        name = _nonempty_string(
+            document[
+                label_key
+            ],
+            label=(
+                label
+                + " label"
+            ),
+        )
+
+        if name in seen:
+            raise ValueError(
+                label
+                + " contains a duplicate label."
+            )
+
+        seen.add(
+            name
+        )
+
+        result.append(
+            ResultCountView(
+                label=name,
+                count=(
+                    _nonnegative_integer(
+                        document[
+                            "count"
+                        ],
+                        label=(
+                            label
+                            + " count"
+                        ),
+                    )
+                ),
+            )
+        )
+
+    return tuple(
+        result
+    )
+
+
+def _summary_view(
+    value: object,
+) -> ResultSummaryView:
+    document = _exact_object(
+        value,
+        keys={
+            "total_findings",
+            "category_counts",
+            "code_counts",
+            "severity_counts",
+            "scope_counts",
+        },
+        label="Finding summary",
+    )
+
+    return ResultSummaryView(
+        total_findings=(
+            _nonnegative_integer(
+                document[
+                    "total_findings"
+                ],
+                label=(
+                    "Total findings"
+                ),
+            )
+        ),
+        category_counts=(
+            _count_views(
+                document[
+                    "category_counts"
+                ],
+                label_key="category",
+                label=(
+                    "Category counts"
+                ),
+            )
+        ),
+        code_counts=(
+            _count_views(
+                document[
+                    "code_counts"
+                ],
+                label_key="code",
+                label="Code counts",
+            )
+        ),
+        severity_counts=(
+            _count_views(
+                document[
+                    "severity_counts"
+                ],
+                label_key="severity",
+                label=(
+                    "Severity counts"
+                ),
+            )
+        ),
+        scope_counts=(
+            _count_views(
+                document[
+                    "scope_counts"
+                ],
+                label_key="scope",
+                label="Scope counts",
+            )
+        ),
+    )
+
+
+def _mapping_view(
+    value: object,
+) -> ResultColumnMappingView:
+    document = _exact_object(
+        value,
+        keys={
+            "specification_version",
+            "mode",
+            "resolution_completed",
+            "entries",
+        },
+        label="Column-mapping evidence",
+    )
+
+    mode = _nonempty_string(
+        document[
+            "mode"
+        ],
+        label="Column-mapping mode",
+    )
+
+    if mode not in {
+        "strict",
+        "automatic",
+        "explicit",
+    }:
+        raise ValueError(
+            "Column-mapping mode is invalid."
+        )
+
+    resolution_completed = document[
+        "resolution_completed"
+    ]
+
+    if type(
+        resolution_completed
+    ) is not bool:
+        raise ValueError(
+            "Column-mapping completion flag is invalid."
+        )
+
+    raw_entries = document[
+        "entries"
+    ]
+
+    if not isinstance(
+        raw_entries,
+        list,
+    ):
+        raise ValueError(
+            "Column-mapping entries must be an array."
+        )
+
+    entries: list[
+        ResultMappingEntryView
+    ] = []
+
+    sources_seen: set[
+        str
+    ] = set()
+
+    targets_seen: set[
+        str
+    ] = set()
+
+    for raw in raw_entries:
+        entry = _exact_object(
+            raw,
+            keys={
+                "source_field",
+                "target_field",
+            },
+            label="Column-mapping entry",
+        )
+
+        source_field = (
+            _nonempty_string(
+                entry[
+                    "source_field"
+                ],
+                label=(
+                    "Mapping source field"
+                ),
+            )
+        )
+
+        target_field = (
+            _nonempty_string(
+                entry[
+                    "target_field"
+                ],
+                label=(
+                    "Mapping target field"
+                ),
+            )
+        )
+
+        if (
+            source_field
+            == target_field
+        ):
+            raise ValueError(
+                "Column-mapping entries must rename a source field."
+            )
+
+        if source_field in sources_seen:
+            raise ValueError(
+                "Column-mapping source fields must be unique."
+            )
+
+        if target_field in targets_seen:
+            raise ValueError(
+                "Column-mapping target fields must be unique."
+            )
+
+        sources_seen.add(
+            source_field
+        )
+
+        targets_seen.add(
+            target_field
+        )
+
+        entries.append(
+            ResultMappingEntryView(
+                source_field=source_field,
+                target_field=target_field,
+            )
+        )
+
+    if (
+        not resolution_completed
+        and entries
+    ):
+        raise ValueError(
+            "Incomplete column mapping must not contain resolved entries."
+        )
+
+    if (
+        mode == "strict"
+        and entries
+    ):
+        raise ValueError(
+            "Strict mapping must not contain mapping entries."
+        )
+
+    return ResultColumnMappingView(
+        specification_version=(
+            _nonempty_string(
+                document[
+                    "specification_version"
+                ],
+                label=(
+                    "Mapping specification version"
+                ),
+            )
+        ),
+        mode=mode,
+        resolution_completed=(
+            resolution_completed
+        ),
+        entries=tuple(
+            entries
+        ),
+    )
+
+
+def _configuration_view(
+    value: object,
+) -> ResultConfigurationView:
+    document = _exact_object(
+        value,
+        keys={
+            "profile_version",
+            "mapping_mode",
+            "source",
+            "column_mapping_source",
+        },
+        label="Result configuration",
+    )
+
+    mapping_mode = _nonempty_string(
+        document[
+            "mapping_mode"
+        ],
+        label="Configuration mapping mode",
+    )
+
+    if mapping_mode not in {
+        "strict",
+        "automatic",
+        "explicit",
+    }:
+        raise ValueError(
+            "Configuration mapping mode is invalid."
+        )
+
+    raw_mapping_source = document[
+        "column_mapping_source"
+    ]
+
+    mapping_source = (
+        None
+        if raw_mapping_source
+        is None
+        else _file_evidence_view(
+            raw_mapping_source
+        )
+    )
+
+    if (
+        mapping_mode == "explicit"
+        and mapping_source is None
+    ):
+        raise ValueError(
+            "Explicit mapping requires mapping-source evidence."
+        )
+
+    if (
+        mapping_mode != "explicit"
+        and mapping_source is not None
+    ):
+        raise ValueError(
+            "Only explicit mapping may have mapping-source evidence."
+        )
+
+    return ResultConfigurationView(
+        profile_version=(
+            _nonempty_string(
+                document[
+                    "profile_version"
+                ],
+                label=(
+                    "Configuration profile version"
+                ),
+            )
+        ),
+        mapping_mode=mapping_mode,
+        source=_file_evidence_view(
+            document[
+                "source"
+            ]
+        ),
+        column_mapping_source=(
+            mapping_source
+        ),
+    )
+
+
+def _reconcile_count_dimension(
+    stored: tuple[
+        ResultCountView,
+        ...,
+    ],
+    actual: dict[
+        str,
+        int,
+    ],
+    *,
+    label: str,
+) -> None:
+    stored_map = {
+        entry.label: entry.count
+        for entry in stored
+    }
+
+    if not set(
+        actual
+    ).issubset(
+        stored_map
+    ):
+        raise ValueError(
+            label
+            + " omit an observed finding label."
+        )
+
+    for name, count in stored_map.items():
+        if count != actual.get(
+            name,
+            0,
+        ):
+            raise ValueError(
+                label
+                + " do not reconcile with findings."
+            )
+
+
+def _validation_view(
+    value: object,
+    *,
+    configuration: ResultConfigurationView,
+) -> ResultValidationView:
+    document = _exact_object(
+        value,
+        keys={
+            "application_version",
+            "column_mapping",
+            "configured_rules",
+            "descriptor_schema_version",
+            "findings",
+            "input_name",
+            "profile_id",
+            "profile_version",
+            "rows",
+            "status",
+            "summary",
+        },
+        label="Validation evidence",
+    )
+
+    _nonempty_string(
+        document[
+            "input_name"
+        ],
+        label="Validation input name",
+    )
+
+    status = _nonempty_string(
+        document[
+            "status"
+        ],
+        label="Validation status",
+    )
+
+    if status not in {
+        "completed",
+        "stopped_after_ingestion_finding",
+    }:
+        raise ValueError(
+            "Validation status is invalid."
+        )
+
+    raw_rules = document[
+        "configured_rules"
+    ]
+
+    if not isinstance(
+        raw_rules,
+        list,
+    ):
+        raise ValueError(
+            "Configured rules must be an array."
+        )
+
+    configured_rules = tuple(
+        _rule_view(
+            raw
+        )
+        for raw in raw_rules
+    )
+
+    rule_keys = tuple(
+        (
+            rule.rule_id,
+            rule.rule_version,
+        )
+        for rule in configured_rules
+    )
+
+    if len(
+        set(
+            rule_keys
+        )
+    ) != len(
+        rule_keys
+    ):
+        raise ValueError(
+            "Configured-rule identities must be unique."
+        )
+
+    raw_findings = document[
+        "findings"
+    ]
+
+    if not isinstance(
+        raw_findings,
+        list,
+    ):
+        raise ValueError(
+            "Findings must be an array."
+        )
+
+    findings = tuple(
+        _finding_view(
+            raw
+        )
+        for raw in raw_findings
+    )
+
+    rule_set = set(
+        rule_keys
+    )
+
+    for finding in findings:
+        if (
+            finding.rule.rule_id,
+            finding.rule.rule_version,
+        ) not in rule_set:
+            raise ValueError(
+                "Finding references an unconfigured rule."
+            )
+
+    summary = _summary_view(
+        document[
+            "summary"
+        ]
+    )
+
+    if summary.total_findings != len(
+        findings
+    ):
+        raise ValueError(
+            "Finding total does not reconcile with findings."
+        )
+
+    actual_category: dict[
+        str,
+        int,
+    ] = {}
+
+    actual_code: dict[
+        str,
+        int,
+    ] = {}
+
+    actual_severity: dict[
+        str,
+        int,
+    ] = {}
+
+    actual_scope: dict[
+        str,
+        int,
+    ] = {}
+
+    for finding in findings:
+        for mapping, key in (
+            (
+                actual_category,
+                finding.category,
+            ),
+            (
+                actual_code,
+                finding.code,
+            ),
+            (
+                actual_severity,
+                finding.severity,
+            ),
+            (
+                actual_scope,
+                finding.scope,
+            ),
+        ):
+            mapping[
+                key
+            ] = (
+                mapping.get(
+                    key,
+                    0,
+                )
+                + 1
+            )
+
+    _reconcile_count_dimension(
+        summary.category_counts,
+        actual_category,
+        label="Category counts",
+    )
+
+    _reconcile_count_dimension(
+        summary.code_counts,
+        actual_code,
+        label="Code counts",
+    )
+
+    _reconcile_count_dimension(
+        summary.severity_counts,
+        actual_severity,
+        label="Severity counts",
+    )
+
+    _reconcile_count_dimension(
+        summary.scope_counts,
+        actual_scope,
+        label="Scope counts",
+    )
+
+    profile_version = (
+        _nonempty_string(
+            document[
+                "profile_version"
+            ],
+            label=(
+                "Validation profile version"
+            ),
+        )
+    )
+
+    if (
+        profile_version
+        != configuration.profile_version
+    ):
+        raise ValueError(
+            "Validation and configuration profile identities differ."
+        )
+
+    column_mapping = _mapping_view(
+        document[
+            "column_mapping"
+        ]
+    )
+
+    if (
+        column_mapping.mode
+        != configuration.mapping_mode
+    ):
+        raise ValueError(
+            "Validation and configuration mapping modes differ."
+        )
+
+    if (
+        column_mapping.mode
+        == "explicit"
+        and not column_mapping.entries
+    ):
+        raise ValueError(
+            "Explicit mapping requires mapping entries."
+        )
+
+    return ResultValidationView(
+        application_version=(
+            _nonempty_string(
+                document[
+                    "application_version"
+                ],
+                label=(
+                    "Application version"
+                ),
+            )
+        ),
+        descriptor_schema_version=(
+            _nonempty_string(
+                document[
+                    "descriptor_schema_version"
+                ],
+                label=(
+                    "Descriptor schema version"
+                ),
+            )
+        ),
+        profile_id=(
+            _nonempty_string(
+                document[
+                    "profile_id"
+                ],
+                label="Profile ID",
+            )
+        ),
+        profile_version=(
+            profile_version
+        ),
+        status=status,
+        rows=_nonnegative_integer(
+            document[
+                "rows"
+            ],
+            label="Processed rows",
+        ),
+        configured_rules=(
+            configured_rules
+        ),
+        column_mapping=(
+            column_mapping
+        ),
+        summary=summary,
+        findings=findings,
+    )
+
+
+@dataclass(
+    frozen=True,
+    slots=True,
+)
 class ReviewResultView:
     """Application-safe durable result state for presentation."""
 
@@ -91,6 +1519,15 @@ class ReviewResultView:
     total_findings: int | None
     evidence_available: bool
     validation_status: str | None = None
+    configuration: (
+        ResultConfigurationView
+        | None
+    ) = None
+    validation: (
+        ResultValidationView
+        | None
+    ) = None
+
 
 
 class ReviewSubmissionError(
@@ -435,10 +1872,30 @@ class ReviewWorkflowService:
             | None
         ) = None
 
+        configuration_view: (
+            ResultConfigurationView
+            | None
+        ) = None
+
+        validation_view: (
+            ResultValidationView
+            | None
+        ) = None
+
         evidence_available = False
 
         if artifact is not None:
             try:
+                if (
+                    artifact.schema_id
+                    != RESULT_BUNDLE_SCHEMA_ID
+                    or artifact.schema_version
+                    != RESULT_BUNDLE_SCHEMA_VERSION
+                ):
+                    raise ValueError(
+                        "Result artifact schema identity is invalid."
+                    )
+
                 payload = (
                     self._result_reader
                     .read_verified(
@@ -456,83 +1913,247 @@ class ReviewWorkflowService:
                     payload
                 )
 
-                if not isinstance(
+                document = _exact_object(
                     document,
+                    keys={
+                        "schema_id",
+                        "schema_version",
+                        "run",
+                        "configuration",
+                        "validation",
+                    },
+                    label="Result bundle",
+                )
+
+                if (
+                    document[
+                        "schema_id"
+                    ]
+                    != RESULT_BUNDLE_SCHEMA_ID
+                    or document[
+                        "schema_version"
+                    ]
+                    != RESULT_BUNDLE_SCHEMA_VERSION
+                ):
+                    raise ValueError(
+                        "Result bundle schema identity is invalid."
+                    )
+
+                run_document = (
+                    _exact_object(
+                        document[
+                            "run"
+                        ],
+                        keys={
+                            "run_id",
+                            "workspace_id",
+                            "configuration_id",
+                            "status",
+                            "created_at",
+                            "queued_at",
+                            "started_at",
+                            "finished_at",
+                            "cancel_requested_at",
+                        },
+                        label=(
+                            "Result bundle run"
+                        ),
+                    )
+                )
+
+                expected_run = {
+                    "run_id": run.run_id,
+                    "workspace_id": (
+                        run.workspace_id
+                    ),
+                    "configuration_id": (
+                        run.configuration_id
+                    ),
+                    "status": (
+                        run.status.value
+                    ),
+                    "created_at": (
+                        run.created_at
+                    ),
+                    "queued_at": (
+                        run.queued_at
+                    ),
+                    "started_at": (
+                        run.started_at
+                    ),
+                    "finished_at": (
+                        run.finished_at
+                    ),
+                    "cancel_requested_at": (
+                        run.cancel_requested_at
+                    ),
+                }
+
+                if run_document != expected_run:
+                    raise ValueError(
+                        "Result bundle run identity does not match the durable run."
+                    )
+
+                configuration_record = (
+                    self._lifecycle
+                    .get_configuration(
+                        run.configuration_id
+                    )
+                )
+
+                if (
+                    configuration_record.configuration_id
+                    != run.configuration_id
+                    or configuration_record.workspace_id
+                    != run.workspace_id
+                ):
+                    raise ValueError(
+                        "Durable run configuration identity does not match the run."
+                    )
+
+                configuration_digest = (
+                    sha256(
+                        configuration_record
+                        .canonical_json
+                        .encode(
+                            "utf-8"
+                        )
+                    )
+                    .hexdigest()
+                )
+
+                if (
+                    configuration_digest
+                    != configuration_record.sha256
+                ):
+                    raise ValueError(
+                        "Durable run configuration SHA-256 is invalid."
+                    )
+
+                durable_configuration = (
+                    json.loads(
+                        configuration_record
+                        .canonical_json
+                    )
+                )
+
+                if not isinstance(
+                    durable_configuration,
                     dict,
                 ):
                     raise ValueError(
-                        "Result bundle must be an object."
+                        "Durable run configuration must be an object."
                     )
 
-                validation = document.get(
-                    "validation"
+                bundle_configuration = (
+                    _exact_object(
+                        document[
+                            "configuration"
+                        ],
+                        keys={
+                            "profile_version",
+                            "mapping_mode",
+                            "source",
+                            "column_mapping_source",
+                        },
+                        label=(
+                            "Result bundle configuration"
+                        ),
+                    )
                 )
 
-                status_value = (
-                    validation.get(
-                        "status"
+                configuration_view = (
+                    _configuration_view(
+                        bundle_configuration
                     )
-                    if isinstance(
-                        validation,
-                        dict,
-                    )
-                    else None
-                )
-
-                if (
-                    not isinstance(
-                        status_value,
-                        str,
-                    )
-                    or not status_value
-                ):
-                    raise ValueError(
-                        "Result bundle validation status is invalid."
-                    )
-
-                summary = (
-                    validation.get(
-                        "summary"
-                    )
-                    if isinstance(
-                        validation,
-                        dict,
-                    )
-                    else None
-                )
-
-                value = (
-                    summary.get(
-                        "total_findings"
-                    )
-                    if isinstance(
-                        summary,
-                        dict,
-                    )
-                    else None
                 )
 
                 if (
-                    not isinstance(
-                        value,
-                        int,
-                    )
-                    or value < 0
+                    configuration_view.mapping_mode
+                    == "explicit"
                 ):
-                    raise ValueError(
-                        "Result bundle finding total is invalid."
+                    if set(
+                        durable_configuration
+                    ) != {
+                        "profile_version",
+                        "mapping_mode",
+                        "source",
+                        "column_mapping_source",
+                    }:
+                        raise ValueError(
+                            "Explicit durable configuration has an unexpected shape."
+                        )
+
+                    if (
+                        durable_configuration
+                        != bundle_configuration
+                    ):
+                        raise ValueError(
+                            "Explicit configuration evidence does not reconcile."
+                        )
+
+                else:
+                    if set(
+                        durable_configuration
+                    ) != {
+                        "profile_version",
+                        "mapping_mode",
+                        "source",
+                    }:
+                        raise ValueError(
+                            "Non-explicit durable configuration has an unexpected shape."
+                        )
+
+                    normalized_configuration = dict(
+                        durable_configuration
                     )
 
-                total_findings = value
-                validation_status = status_value
+                    normalized_configuration[
+                        "column_mapping_source"
+                    ] = None
+
+                    if (
+                        normalized_configuration
+                        != bundle_configuration
+                    ):
+                        raise ValueError(
+                            "Non-explicit configuration evidence does not reconcile."
+                        )
+
+                validation_view = (
+                    _validation_view(
+                        document[
+                            "validation"
+                        ],
+                        configuration=(
+                            configuration_view
+                        ),
+                    )
+                )
+
+                total_findings = (
+                    validation_view
+                    .summary
+                    .total_findings
+                )
+
+                validation_status = (
+                    validation_view.status
+                )
+
                 evidence_available = True
 
             except (
                 ResultStoreError,
+                LedgerRecordNotFoundError,
                 UnicodeDecodeError,
                 json.JSONDecodeError,
                 ValueError,
             ):
+                total_findings = None
+                validation_status = None
+                configuration_view = None
+                validation_view = None
                 evidence_available = False
 
         return ReviewResultView(
@@ -571,5 +2192,11 @@ class ReviewWorkflowService:
             ),
             evidence_available=(
                 evidence_available
+            ),
+            configuration=(
+                configuration_view
+            ),
+            validation=(
+                validation_view
             ),
         )

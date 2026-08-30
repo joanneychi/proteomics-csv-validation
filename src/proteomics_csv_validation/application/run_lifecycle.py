@@ -121,6 +121,14 @@ class RunRepository(Protocol):
     ) -> tuple[AnalysisRunRecord, ...]:
         """Atomically recover all persisted RUNNING rows."""
 
+    def get_configuration(
+        self,
+        configuration_id: str,
+    ) -> RunConfigurationRecord:
+        """Return one persisted run-configuration snapshot."""
+
+
+
     def get_run(
         self,
         run_id: str,
@@ -254,6 +262,16 @@ class RunLifecycleService:
         return self.repository.recover_interrupted_runs(
             interrupted_at=self.clock(),
         )
+
+    def get_configuration(
+        self,
+        configuration_id: str,
+    ) -> RunConfigurationRecord:
+        return self.repository.get_configuration(
+            configuration_id
+        )
+
+
 
     def get_run(
         self,

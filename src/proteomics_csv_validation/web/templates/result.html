@@ -43,6 +43,20 @@
         <code>{{ result.configuration_id }}</code>
       </dd>
     </div>
+
+    {% if result.started_at %}
+    <div>
+      <dt>Started</dt>
+      <dd>{{ result.started_at }}</dd>
+    </div>
+    {% endif %}
+
+    {% if result.finished_at %}
+    <div>
+      <dt>Finished</dt>
+      <dd>{{ result.finished_at }}</dd>
+    </div>
+    {% endif %}
   </dl>
 </section>
 
@@ -61,12 +75,10 @@
     {% endif %}
   </h2>
 
-  {% if result.validation_status %}
   <p>
     <strong>Validation status:</strong>
     {{ result.validation_status | replace("_", " ") | capitalize }}
   </p>
-  {% endif %}
 
   {% if result.validation_status == "stopped_after_ingestion_finding" %}
   <p class="scope-warning">
@@ -86,17 +98,375 @@
     No configured structural findings were reported.
     This does not establish scientific validity,
     biological correctness, data quality beyond the configured checks,
-    or approval.
+    repository acceptance, or approval.
+  </p>
+  {% endif %}
+
+  <p class="scope-warning">
+    The displayed evidence supports technical structural review only.
+    It is not scientific approval, a biological interpretation,
+    a clinical interpretation, or a dataset-acceptance decision.
+  </p>
+</section>
+
+<section
+  class="result-panel"
+  aria-labelledby="source-evidence-title"
+>
+  <h2 id="source-evidence-title">
+    Source evidence
+  </h2>
+
+  <dl class="evidence-grid">
+    <div>
+      <dt>Submitted file</dt>
+      <dd>
+        <code>{{ result.configuration.source.display_name }}</code>
+      </dd>
+    </div>
+
+    <div>
+      <dt>Source SHA-256</dt>
+      <dd>
+        <code>{{ result.configuration.source.sha256 }}</code>
+      </dd>
+    </div>
+
+    <div>
+      <dt>Source bytes</dt>
+      <dd>{{ result.configuration.source.byte_count }}</dd>
+    </div>
+  </dl>
+</section>
+
+<section
+  class="result-panel"
+  aria-labelledby="configuration-title"
+>
+  <h2 id="configuration-title">
+    Selected configuration
+  </h2>
+
+  <dl class="evidence-grid">
+    <div>
+      <dt>Profile version</dt>
+      <dd>{{ result.configuration.profile_version }}</dd>
+    </div>
+
+    <div>
+      <dt>Mapping mode</dt>
+      <dd>{{ result.configuration.mapping_mode }}</dd>
+    </div>
+  </dl>
+
+  {% if result.configuration.column_mapping_source %}
+  <h3>
+    Mapping source evidence
+  </h3>
+
+  <dl class="evidence-grid">
+    <div>
+      <dt>Mapping file</dt>
+      <dd>
+        <code>{{ result.configuration.column_mapping_source.display_name }}</code>
+      </dd>
+    </div>
+
+    <div>
+      <dt>Mapping SHA-256</dt>
+      <dd>
+        <code>{{ result.configuration.column_mapping_source.sha256 }}</code>
+      </dd>
+    </div>
+
+    <div>
+      <dt>Mapping bytes</dt>
+      <dd>{{ result.configuration.column_mapping_source.byte_count }}</dd>
+    </div>
+  </dl>
+  {% endif %}
+</section>
+
+<section
+  class="result-panel"
+  aria-labelledby="validation-identity-title"
+>
+  <h2 id="validation-identity-title">
+    Validation identity
+  </h2>
+
+  <dl class="evidence-grid">
+    <div>
+      <dt>Application version</dt>
+      <dd>{{ result.validation.application_version }}</dd>
+    </div>
+
+    <div>
+      <dt>Profile</dt>
+      <dd>
+        {{ result.validation.profile_id }}
+        ·
+        {{ result.validation.profile_version }}
+      </dd>
+    </div>
+
+    <div>
+      <dt>Descriptor schema</dt>
+      <dd>{{ result.validation.descriptor_schema_version }}</dd>
+    </div>
+
+    <div>
+      <dt>Validation status</dt>
+      <dd>{{ result.validation.status }}</dd>
+    </div>
+
+    <div>
+      <dt>Processed rows</dt>
+      <dd>{{ result.validation.rows }}</dd>
+    </div>
+  </dl>
+</section>
+
+<section
+  class="result-panel"
+  aria-labelledby="summary-counts-title"
+>
+  <h2 id="summary-counts-title">
+    Summary counts
+  </h2>
+
+  <p>
+    <strong>Total findings:</strong>
+    {{ result.validation.summary.total_findings }}
+  </p>
+
+  <h3>By category</h3>
+  <ul>
+    {% for entry in result.validation.summary.category_counts %}
+    <li>
+      {{ entry.label }}:
+      {{ entry.count }}
+    </li>
+    {% endfor %}
+  </ul>
+
+  <h3>By code</h3>
+  {% if result.validation.summary.code_counts %}
+  <ul>
+    {% for entry in result.validation.summary.code_counts %}
+    <li>
+      <code>{{ entry.label }}</code>:
+      {{ entry.count }}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>No finding codes were emitted.</p>
+  {% endif %}
+
+  <h3>By severity</h3>
+  <ul>
+    {% for entry in result.validation.summary.severity_counts %}
+    <li>
+      {{ entry.label }}:
+      {{ entry.count }}
+    </li>
+    {% endfor %}
+  </ul>
+
+  <h3>By scope</h3>
+  <ul>
+    {% for entry in result.validation.summary.scope_counts %}
+    <li>
+      {{ entry.label }}:
+      {{ entry.count }}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section
+  class="result-panel"
+  aria-labelledby="configured-rules-title"
+>
+  <h2 id="configured-rules-title">
+    Configured rules
+  </h2>
+
+  <ul>
+    {% for rule in result.validation.configured_rules %}
+    <li>
+      <code>{{ rule.rule_id }}</code>
+      ·
+      {{ rule.rule_version }}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section
+  class="result-panel"
+  aria-labelledby="column-mapping-title"
+>
+  <h2 id="column-mapping-title">
+    Column mapping
+  </h2>
+
+  <dl class="evidence-grid">
+    <div>
+      <dt>Specification</dt>
+      <dd>{{ result.validation.column_mapping.specification_version }}</dd>
+    </div>
+
+    <div>
+      <dt>Mode</dt>
+      <dd>{{ result.validation.column_mapping.mode }}</dd>
+    </div>
+
+    <div>
+      <dt>Resolution completed</dt>
+      <dd>
+        {% if result.validation.column_mapping.resolution_completed %}
+        yes
+        {% else %}
+        no
+        {% endif %}
+      </dd>
+    </div>
+  </dl>
+
+  {% if result.validation.column_mapping.entries %}
+  <h3>Resolved entries</h3>
+
+  <ul>
+    {% for entry in result.validation.column_mapping.entries %}
+    <li>
+      <code>{{ entry.source_field }}</code>
+      →
+      <code>{{ entry.target_field }}</code>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>No header remapping was recorded.</p>
+  {% endif %}
+</section>
+
+<section
+  class="result-panel"
+  aria-labelledby="findings-title"
+>
+  <h2 id="findings-title">
+    Individual findings
+  </h2>
+
+  {% if result.validation.findings %}
+  <ol>
+    {% for finding in result.validation.findings %}
+    <li>
+      <h3>
+        <code>{{ finding.code }}</code>
+      </h3>
+
+      <dl class="evidence-grid">
+        <div>
+          <dt>Category</dt>
+          <dd>{{ finding.category }}</dd>
+        </div>
+
+        <div>
+          <dt>Severity</dt>
+          <dd>{{ finding.severity }}</dd>
+        </div>
+
+        <div>
+          <dt>Scope</dt>
+          <dd>{{ finding.scope }}</dd>
+        </div>
+
+        <div>
+          <dt>Rule</dt>
+          <dd>
+            <code>{{ finding.rule.rule_id }}</code>
+            ·
+            {{ finding.rule.rule_version }}
+          </dd>
+        </div>
+
+        <div>
+          <dt>Row</dt>
+          <dd>
+            {% if finding.location.row_number is not none %}
+            {{ finding.location.row_number }}
+            {% else %}
+            file level
+            {% endif %}
+          </dd>
+        </div>
+
+        <div>
+          <dt>Field</dt>
+          <dd>
+            {% if finding.location.field_name %}
+            <code>{{ finding.location.field_name }}</code>
+            {% else %}
+            not field-specific
+            {% endif %}
+          </dd>
+        </div>
+
+        <div>
+          <dt>Observed value</dt>
+          <dd>
+            <code>{{ finding.observed_value.display_value }}</code>
+            <span>({{ finding.observed_value.value_type }})</span>
+          </dd>
+        </div>
+
+        <div>
+          <dt>Expected value</dt>
+          <dd>
+            <code>{{ finding.expected_value.display_value }}</code>
+            <span>({{ finding.expected_value.value_type }})</span>
+          </dd>
+        </div>
+      </dl>
+
+      {% if finding.entity %}
+      <p>
+        <strong>Entity:</strong>
+        {{ finding.entity.entity_type }}
+      </p>
+
+      <ul>
+        {% for part in finding.entity.key_parts %}
+        <li>
+          <code>{{ part.field_name }}</code>:
+          <code>{{ part.value.display_value }}</code>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+
+      <p>
+        {{ finding.message }}
+      </p>
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p>
+    No individual findings were emitted by the configured rules.
   </p>
   {% endif %}
 </section>
 
 <section
   class="result-panel"
-  aria-labelledby="evidence-title"
+  aria-labelledby="artifact-evidence-title"
 >
-  <h2 id="evidence-title">
-    Result evidence
+  <h2 id="artifact-evidence-title">
+    Result artifact evidence
   </h2>
 
   <dl class="evidence-grid">
@@ -135,7 +505,8 @@
 
   <p>
     Execution completed, but the durable result evidence cannot currently
-    be verified. No scientific conclusion should be inferred from this state.
+    be verified. Detailed result evidence is withheld in this state.
+    No scientific conclusion should be inferred from this state.
   </p>
 </section>
 
