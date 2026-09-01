@@ -5,7 +5,7 @@
 The system was developed during an eight-week graduate capstone and reached application version `0.4.0` by the end of the project.
 
 - **Author:** Joanne Y. Chan
-- **Application version:** `0.4.0`
+- **Application version:** `0.5.0`
 - **Default profile:** `0.2.0`
 - **Reduced Metadata profile:** `0.3.0`
 - **Repository regression suite:** 342 passing tests
@@ -66,8 +66,8 @@ proteomics-csv-app --help
 Expected version output:
 
 ```text
-proteomics-csv-validate 0.4.0
-proteomics-csv-app 0.4.0
+proteomics-csv-validate 0.5.0
+proteomics-csv-app 0.5.0
 ```
 
 ### Run the optional local browser application
@@ -181,14 +181,14 @@ The selected profile determines required profile fields. Header mapping resolves
 
 | Term | Meaning in this project |
 |---|---|
-| **Application version** | Version embedded in the executable software, such as `0.4.0` |
-| **Release tag** | Git tag identifying a release snapshot, such as `v0.4.0` |
+| **Application version** | Version embedded in the executable software, such as `0.5.0` |
+| **Release tag** | Git tag identifying a release snapshot, such as `v0.5.0` |
 | **Profile** | Versioned validation contract defining the processed-sample fields and which fields are required |
 | **Record** | One processed sample-summary row in an input CSV |
 | **Key field** | Record identifier field; `sample_id` is the key field in the built-in profiles |
 | **Finding** | One rule-detected condition at one applicable file or row location; a record may produce more than one finding |
 
-Application versions and profile versions advance independently. Release tag `v0.4.0` identifies application version `0.4.0`; profile `0.2.0` is the default, and `--profile-version 0.3.0` selects Reduced Metadata profile `0.3.0`.
+Application versions and profile versions advance independently. Release tag `v0.5.0` identifies application version `0.5.0`; profile `0.2.0` remains the default, and `--profile-version 0.3.0` selects Reduced Metadata profile `0.3.0`.
 
 ## Release progression
 
@@ -198,10 +198,11 @@ Application versions and profile versions advance independently. Release tag `v0
 | `v0.2.0` | `0.2.0` | `0.1.0` | `0.1.0` | Required-value missingness validation | 75 |
 | `v0.3.0` | `0.3.0` | `0.2.0` | `0.1.0`, `0.2.0` | Automatic and explicit column mapping | 98 |
 | `v0.4.0` | `0.4.0` | `0.2.0` | `0.1.0`, `0.2.0`, `0.3.0` | Explicit profile selection and Reduced Metadata profile `0.3.0` | 111 |
+| `v0.5.0` | `0.5.0` | `0.2.0` | `0.1.0`, `0.2.0`, `0.3.0` | Local browser review with verified result evidence, durable history, deterministic comparison, and exact Result Bundle export | 342 |
 
 `Profiles packaged` lists the profile resources included with each release. Application version `0.3.0` packaged profiles `0.1.0` and `0.2.0` but always loaded profile `0.2.0`. Release `v0.4.0` added `--profile-version` to select a registered profile. Omitting the option defaults to profile `0.2.0`; `--profile-version 0.3.0` selects the Reduced Metadata contract.
 
-`v0.4.0` snapshot contains 111 regression tests. Subsequent tests-only ingestion hardening increased the maintained repository suite to 126 tests without changing application runtime source. The current repository includes the local browser review workflow while retaining application version `0.4.0`; the current regression count is summarized above. The release table therefore ends at `v0.4.0` until a newer release is created.
+`v0.4.0` snapshot contains 111 regression tests. Subsequent tests-only ingestion hardening increased the maintained repository suite to 126 tests without changing application runtime source. Application version `0.5.0` adds the local browser review workflow, verified result evidence, durable history, deterministic comparison, and exact Result Bundle export. The release regression suite contains 342 tests.
 
 ## Validation scope
 
@@ -241,7 +242,7 @@ Profile versions identify the record contract applied during validation.
 | Profile | Role in application history | Required-field policy | What changed |
 |---|---|---|---|
 | `0.1.0` | Default in applications `0.1.0` and `0.2.0` | Six required fields | Original profile; descriptions identify synthetic one-study records |
-| `0.2.0` | Default in applications `0.3.0` and `0.4.0` | Six required fields | Descriptions identify study-level records; validation requirements are unchanged from `0.1.0` |
+| `0.2.0` | Default in applications `0.3.0`, `0.4.0`, and `0.5.0` | Six required fields | Descriptions identify study-level records; validation requirements are unchanged from `0.1.0` |
 | `0.3.0` | Introduced in application `0.4.0` as the Reduced Metadata option | Four required fields; condition and preparation batch optional | Adds two optional metadata fields |
 
 ### Exact profile `0.1.0` to `0.2.0` change

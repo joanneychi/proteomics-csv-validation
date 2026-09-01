@@ -196,7 +196,7 @@ def test_cli_selects_profile_and_reports_candidate_identity(tmp_path: Path) -> N
     ])
     assert code == 0
     text = report.read_text(encoding="utf-8")
-    assert "- Application version: `0.4.0`" in text
+    assert "- Application version: `0.5.0`" in text
     assert "- Profile version: `0.3.0`" in text
     assert "- Total findings: `0`" in text
     assert "Version 0.3.0 checks CSV structure" not in text
