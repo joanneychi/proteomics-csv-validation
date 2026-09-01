@@ -1,6 +1,6 @@
 # Proteomics CSV Validation System
 
-`proteomics-csv-validation` is a local Python command-line validator for processed-sample proteomics CSV files. CLI processing checks required columns, sample identifiers, and required values. Mapping options resolve source headers to field names defined by the selected profile. Each run writes a Markdown technical review report and preserves the source CSV. Findings identify structural conditions for review before downstream analysis.
+`proteomics-csv-validation` is a local Python validation system for processed-sample proteomics CSV files. The command-line interface (CLI) checks required columns, sample identifiers, required values, and configured header mappings. An optional browser application, served on loopback only, adds result and evidence review, history, comparison, and exact Result Bundle export. Findings identify structural conditions for review before downstream analysis.
 
 The system was developed during an eight-week graduate capstone and reached application version `0.4.0` by the end of the project.
 
@@ -8,7 +8,7 @@ The system was developed during an eight-week graduate capstone and reached appl
 - **Application version:** `0.4.0`
 - **Default profile:** `0.2.0`
 - **Reduced Metadata profile:** `0.3.0`
-- **Repository regression suite:** 126 passing tests
+- **Repository regression suite:** 342 passing tests
 - **Python:** `>=3.11`
 - **Development status:** Alpha
 
@@ -18,7 +18,7 @@ Begin with the project files already available locally. Run the commands from th
 
 ### Prerequisite
 
-Python 3.11 or newer is required. Editable installation may contact a package index for build requirements and pytest. Runtime validation reads local files and runs with the Python standard library.
+Python 3.11 or newer is required. Editable installation may contact a package index for build requirements and the optional development or browser dependencies selected below. The base command-line runtime uses only the Python standard library.
 
 macOS or Linux:
 
@@ -39,7 +39,7 @@ macOS or Linux:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[dev,web]"
 ```
 
 Windows PowerShell:
@@ -47,23 +47,36 @@ Windows PowerShell:
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[dev,web]"
 ```
 
-`-e` installs the current project in editable mode. `.[dev]` installs pytest for repository verification. Runtime has zero third-party dependencies. Leave `.venv` active for the commands below.
+`-e` installs the current project in editable mode. `.[dev]` adds pytest and httpx2 for repository verification, while `.[web]` adds the optional browser-application dependencies. The combined `.[dev,web]` installation supports the complete repository suite and the local browser application.
 
-### Verify the installed command
+The base command-line runtime retains zero third-party dependencies. For an editable CLI-only installation, use `python -m pip install -e .`. Leave `.venv` active for the commands below.
+
+### Verify the installed commands
 
 ```bash
 proteomics-csv-validate --version
 proteomics-csv-validate --help
+proteomics-csv-app --version
+proteomics-csv-app --help
 ```
 
 Expected version output:
 
 ```text
 proteomics-csv-validate 0.4.0
+proteomics-csv-app 0.4.0
 ```
+
+### Run the optional local browser application
+
+```bash
+proteomics-csv-app
+```
+
+`proteomics-csv-app` binds to loopback only (`127.0.0.1`) and uses port `8000` by default. Open `http://127.0.0.1:8000` in a browser. Use `proteomics-csv-app --port PORT` to select another local port from 1024 through 65535.
 
 Default profile `0.2.0` applies to the commands below. A profile defines required fields, and a finding is one reported condition at a file or row location.
 
@@ -143,11 +156,7 @@ finding_code_counts:
 python -m pytest
 ```
 
-Expected result:
-
-```text
-126 passed
-```
+Expected result: all tests pass.
 
 For verified wheel installation and checksum procedures, see [LOCAL_WHEEL_DEPLOYMENT.md](docs/deployment/LOCAL_WHEEL_DEPLOYMENT.md).
 
@@ -192,7 +201,7 @@ Application versions and profile versions advance independently. Release tag `v0
 
 `Profiles packaged` lists the profile resources included with each release. Application version `0.3.0` packaged profiles `0.1.0` and `0.2.0` but always loaded profile `0.2.0`. Release `v0.4.0` added `--profile-version` to select a registered profile. Omitting the option defaults to profile `0.2.0`; `--profile-version 0.3.0` selects the Reduced Metadata contract.
 
-`v0.4.0` snapshot contains 111 regression tests; the current repository suite passes 126. Fifteen additional repository tests exercise ingestion behavior already present in the tagged runtime source. Application source files in `src/proteomics_csv_validation/` are byte-identical to the `v0.4.0` tag.
+`v0.4.0` snapshot contains 111 regression tests. Subsequent tests-only ingestion hardening increased the maintained repository suite to 126 tests without changing application runtime source. The current repository includes the local browser review workflow while retaining application version `0.4.0`; the current regression count is summarized above. The release table therefore ends at `v0.4.0` until a newer release is created.
 
 ## Validation scope
 
@@ -217,7 +226,7 @@ Excluded functions:
 - biological or clinical interpretation
 - regulatory decisions
 - repository-conformance assessment
-- database or hosted-service operation
+- hosted-service operation
 - cloud upload
 - production deployment
 
@@ -437,9 +446,9 @@ Run the complete suite:
 python -m pytest
 ```
 
-Current repository suite passes 126 tests. `tests/test_ingest.py` contains 20 ingestion regression tests; the `v0.4.0` tagged snapshot contained 5. Fifteen added tests exercise existing ingestion behavior involving argument types, CSV-extension checks, file access, UTF-8 byte-order-mark (BOM) and NUL-byte handling, parser failures, header validation, byte, row, and column limits, blank records, and record width.
+The complete repository suite covers both command-line and browser workflows. `tests/test_ingest.py` contains 20 ingestion regression tests; the `v0.4.0` tagged snapshot contained 5. Fifteen added ingestion tests exercise existing ingestion behavior involving argument types, CSV-extension checks, file access, UTF-8 byte-order-mark (BOM) and NUL-byte handling, parser failures, header validation, byte, row, and column limits, blank records, and record width.
 
-The suite exercises validator logic, aggregation, ingestion, profile loading, profile selection, column mapping, CLI behavior, pipeline integration, report rendering, packaging, and end-to-end execution.
+The suite exercises validator logic, aggregation, ingestion, profile loading, profile selection, column mapping, CLI behavior, browser review, durable run lifecycle, Result, History, Compare, and Export workflows, security boundaries, pipeline integration, report rendering, packaging, and end-to-end execution.
 
 GitHub Actions runs seven jobs for pull requests targeting `main` and for pushes to `main`: six test environments and a build-artifacts job. Six test environments cover Ubuntu with Python 3.11, 3.12, 3.13, and 3.14; Windows with Python 3.14; and macOS with Python 3.14. Manual dispatch is also available. Release publication is outside the workflow.
 
@@ -457,8 +466,12 @@ docs/
     LOCAL_WHEEL_DEPLOYMENT.md
 src/
   proteomics_csv_validation/
+    application/  browser-review application services
+    domain/       run-lifecycle and evidence domain records
+    infrastructure/  SQLite ledger and result-artifact persistence
     profiles/     versioned profile resources and loader
     validators/   schema, identifier, and missingness validators
+    web/          loopback browser routes, templates, static assets, and security
     aggregate.py  finding ordering and summary counts
     cli.py        command-line interface
     column_mapping.py  header mapping
@@ -501,23 +514,25 @@ Common local setup conditions:
 | Condition | Action |
 |---|---|
 | CLI command unavailable after installation | Confirm that `.venv` is active, then rerun the version check |
+| Browser application reports missing web dependencies | Reinstall the editable project with `.[web]` or `.[dev,web]` |
 | Python version below 3.11 | Switch to a supported interpreter |
 | Report path already exists | Add `--overwrite` when replacement is intended |
 
 If Windows PowerShell blocks `Activate.ps1`, run the virtual-environment executables directly and leave the system execution policy unchanged. From the repository root:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m pip install -e ".[dev,web]"
 .\.venv\Scripts\proteomics-csv-validate.exe --version
+.\.venv\Scripts\proteomics-csv-app.exe --version
 ```
 
-For the PowerShell fallback, run `.\.venv\Scripts\proteomics-csv-validate.exe` for CLI commands and `.\.venv\Scripts\python.exe` for Python commands.
+For the PowerShell fallback, run `.\.venv\Scripts\proteomics-csv-validate.exe` for CLI commands, `.\.venv\Scripts\proteomics-csv-app.exe` for the local browser application, and `.\.venv\Scripts\python.exe` for Python commands.
 
 For the detailed wheel-installation, checksum, smoke-test, and rollback procedure, see [LOCAL_WHEEL_DEPLOYMENT.md](docs/deployment/LOCAL_WHEEL_DEPLOYMENT.md).
 
 ## Data and privacy
 
-Bundled fixtures are synthetic. PXD060583 supplies the public source for the 42-record processed-sample evaluation inputs. Institutional, proprietary, or restricted datasets require the applicable authorization and storage/access controls. CLI execution reads a selected local CSV and writes the report to a selected local path.
+Bundled fixtures are synthetic. PXD060583 supplies the public source for the 42-record processed-sample evaluation inputs. Institutional, proprietary, or restricted datasets require the applicable authorization and storage/access controls. Both interfaces operate locally. CLI execution reads a selected local CSV and writes the report to a selected local path. The optional browser application is served on loopback only, records run state in a local SQLite ledger, and stores Result Bundle artifacts on the local filesystem.
 
 ## License
 

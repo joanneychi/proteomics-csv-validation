@@ -236,6 +236,11 @@ def test_root_redirects_to_review_and_review_is_semantic(
         )
 
         assert (
+            "0.1.0 · Processed Sample Summary · historical"
+            in response.text
+        )
+
+        assert (
             'for="mapping-mode"'
             in response.text
         )
@@ -340,6 +345,95 @@ def test_review_post_rejects_wrong_origin(
         )
 
         assert response.status_code == 403
+
+
+def test_review_post_accepts_same_origin_referer_without_origin(
+    tmp_path: Path,
+) -> None:
+    with TestClient(
+        _application(
+            tmp_path
+        ),
+        base_url=_ORIGIN,
+    ) as client:
+        response = client.post(
+            "/reviews",
+            data={
+                "csrf_token": _csrf(
+                    client
+                ),
+                "profile_version": "0.2.0",
+                "mapping_mode": "strict",
+            },
+            files={
+                "input_file": (
+                    _BASELINE.name,
+                    _BASELINE.read_bytes(),
+                    "text/csv",
+                ),
+            },
+            headers={
+                "Referer": (
+                    _ORIGIN
+                    + "/review"
+                ),
+                "Sec-Fetch-Site": (
+                    "same-origin"
+                ),
+            },
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 303
+
+        assert re.fullmatch(
+            r"/results/[0-9a-f]{32}",
+            response.headers[
+                "location"
+            ],
+        )
+
+
+def test_review_post_rejects_opaque_null_origin(
+    tmp_path: Path,
+) -> None:
+    with TestClient(
+        _application(
+            tmp_path
+        ),
+        base_url=_ORIGIN,
+    ) as client:
+        response = client.post(
+            "/reviews",
+            data={
+                "csrf_token": _csrf(
+                    client
+                ),
+                "profile_version": "0.2.0",
+                "mapping_mode": "strict",
+            },
+            files={
+                "input_file": (
+                    _BASELINE.name,
+                    _BASELINE.read_bytes(),
+                    "text/csv",
+                ),
+            },
+            headers={
+                "Origin": "null",
+                "Referer": (
+                    _ORIGIN
+                    + "/review"
+                ),
+                "Sec-Fetch-Site": (
+                    "same-origin"
+                ),
+            },
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 403
+
 
 
 def test_review_post_rejects_invalid_csrf_token(
@@ -516,6 +610,13 @@ def test_baseline_review_prg_persists_verified_result_and_cleans_staging(
         )
 
         assert result.status_code == 200
+
+        assert (
+            result.headers[
+                "cache-control"
+            ]
+            == "no-store"
+        )
 
         assert (
             "Structural review completed"
@@ -1542,7 +1643,7 @@ def test_detailed_baseline_result_exposes_verified_source_configuration_and_rest
                     source_bytes
                 )
             ),
-            "Selected configuration",
+            "Review configuration",
             "Profile version",
             "0.2.0",
             "Mapping mode",
@@ -2025,12 +2126,12 @@ def test_detailed_result_fails_closed_when_verified_artifact_is_corrupted(
         )
 
         assert (
-            "Result evidence publication unavailable"
+            "Review evidence unavailable"
             in visible
         )
 
         assert (
-            "Detailed result evidence is withheld"
+            "Detailed review evidence is withheld"
             in visible
         )
 
@@ -2043,6 +2144,12 @@ def test_detailed_result_fails_closed_when_verified_artifact_is_corrupted(
             "seeded_errors.csv"
             not in visible
         )
+
+    assert (
+        "No scientific conclusion should be inferred from this state."
+        in visible
+    )
+
 
 
 def test_detailed_mapping_evidence_rejects_impossible_domain_states() -> None:
@@ -3986,7 +4093,7 @@ def test_compare_http_success_escapes_source_identity_and_renders_evidence(
         )
 
         assert (
-            "not quality scores or biological interpretation"
+            "quality, improvement, regression, or biological meaning"
             in response.text
         )
 
@@ -4321,7 +4428,7 @@ def test_compare_export_web_architecture_and_template_guards():
     assert "|safe" not in compare
 
     assert (
-        "not quality scores or biological interpretation"
+        "quality, improvement, regression, or biological meaning"
         in compare
     )
 
@@ -4358,3 +4465,712 @@ def test_compare_export_web_architecture_and_template_guards():
         "/compare?left={{ result.run_id }}"
         in result
     )
+
+
+def test_result_missing_get_uses_application_shell_error(
+    tmp_path,
+) -> None:
+    from fastapi.testclient import TestClient
+
+    with TestClient(
+        _application(
+            tmp_path
+        ),
+        base_url=_ORIGIN,
+    ) as client:
+        response = client.get(
+            "/results/not-a-run"
+        )
+
+    assert response.status_code == 404
+    assert "<nav" in response.text
+    assert (
+        "Review result not found"
+        in response.text
+    )
+    assert (
+        response.headers[
+            "cache-control"
+        ]
+        == "no-store"
+    )
+
+
+def test_compare_get_error_retains_selections_in_application_shell(
+    tmp_path,
+) -> None:
+    from fastapi.testclient import TestClient
+
+    with TestClient(
+        _application(
+            tmp_path
+        ),
+        base_url=_ORIGIN,
+    ) as client:
+        response = client.get(
+            "/compare",
+            params={
+                "left": "not-a-run",
+                "right": "also-not-a-run",
+            },
+        )
+
+    assert response.status_code == 400
+    assert "<nav" in response.text
+    assert (
+        "Comparison could not be completed"
+        in response.text
+    )
+    assert (
+        'value="not-a-run"'
+        in response.text
+    )
+    assert (
+        'value="also-not-a-run"'
+        in response.text
+    )
+    assert (
+        response.headers[
+            "cache-control"
+        ]
+        == "no-store"
+    )
+
+
+def test_export_missing_get_uses_application_shell_error(
+    tmp_path,
+) -> None:
+    from fastapi.testclient import TestClient
+
+    unknown = (
+        "a"
+        * 32
+    )
+
+    with TestClient(
+        _application(
+            tmp_path
+        ),
+        base_url=_ORIGIN,
+    ) as client:
+        response = client.get(
+            (
+                "/results/"
+                + unknown
+                + "/export"
+            )
+        )
+
+    assert response.status_code == 404
+    assert "<nav" in response.text
+    assert (
+        "Result Bundle export unavailable"
+        in response.text
+    )
+    assert (
+        "content-disposition"
+        not in response.headers
+    )
+    assert (
+        response.headers[
+            "cache-control"
+        ]
+        == "no-store"
+    )
+
+
+def test_hardened_post_rejection_remains_plain_text(
+    tmp_path,
+) -> None:
+    from fastapi.testclient import TestClient
+
+    with TestClient(
+        _application(
+            tmp_path
+        ),
+        base_url=_ORIGIN,
+    ) as client:
+        response = client.post(
+            "/reviews",
+            content=(
+                b"not-a-multipart-form"
+            ),
+            headers={
+                "Content-Type": (
+                    "application/octet-stream"
+                ),
+            },
+        )
+
+    assert response.status_code == 403
+    assert response.text == "Forbidden"
+    assert "<html" not in (
+        response.text.casefold()
+    )
+
+
+def test_user_facing_get_error_architecture_stays_presentation_only() -> None:
+    from pathlib import Path
+
+    root = (
+        Path(
+            __file__
+        )
+        .resolve()
+        .parents[
+            1
+        ]
+    )
+
+    web = (
+        root
+        / "src"
+        / "proteomics_csv_validation"
+        / "web"
+        / "review.py"
+    ).read_text(
+        encoding="utf-8"
+    )
+
+    compare = (
+        root
+        / "src"
+        / "proteomics_csv_validation"
+        / "web"
+        / "templates"
+        / "compare.html"
+    ).read_text(
+        encoding="utf-8"
+    )
+
+    error = (
+        root
+        / "src"
+        / "proteomics_csv_validation"
+        / "web"
+        / "templates"
+        / "error.html"
+    ).read_text(
+        encoding="utf-8"
+    )
+
+    for forbidden in (
+        "sqlite3",
+        "SQLiteRunRepository",
+        "json.loads",
+        "FilesystemResultStore",
+        "read_verified",
+    ):
+        assert forbidden not in web
+
+    for retired_plain_get_message in (
+        '"Not found"',
+        '"Comparison run ID was not accepted."',
+        '"Comparison requires two distinct runs."',
+        '"Comparison request was not accepted."',
+        '"Comparison run not found."',
+        '"Comparison requires completed successful reviews."',
+        '"Comparison evidence is unavailable."',
+        '"Result not found."',
+        '"Result is not eligible for export."',
+        '"Result export evidence is unavailable."',
+    ):
+        assert retired_plain_get_message not in web
+
+    assert '"Forbidden"' in web
+    assert (
+        '"Invalid multipart request."'
+        in web
+    )
+
+    assert 'name="error.html"' in web
+    assert 'name="compare.html"' in web
+
+    assert "{{ error_message }}" in compare
+    assert "compare-error-title" in compare
+
+    assert "{% extends \"base.html\" %}" in error
+
+    assert "<script" not in (
+        compare.casefold()
+    )
+    assert "<script" not in (
+        error.casefold()
+    )
+
+    assert "|safe" not in compare
+    assert "|safe" not in error
+
+
+def test_input_browser_filename_length_boundary_is_explicit(
+    tmp_path: Path,
+) -> None:
+    def filename_of_length(
+        length: int,
+    ) -> str:
+        suffix = ".csv"
+
+        return (
+            "x"
+            * (
+                length
+                - len(suffix)
+            )
+            + suffix
+        )
+
+    with TestClient(
+        _application(
+            tmp_path
+        ),
+        base_url=_ORIGIN,
+    ) as client:
+        accepted = _submit(
+            client,
+            _BASELINE,
+            filename=filename_of_length(
+                255
+            ),
+        )
+
+        assert accepted.status_code == 303
+
+        rejected = _submit(
+            client,
+            _BASELINE,
+            filename=filename_of_length(
+                256
+            ),
+        )
+
+        assert rejected.status_code == 422
+
+        visible = _visible_text(
+            rejected.text
+        )
+
+        assert (
+            "The selected filename must be 255 characters or fewer."
+            in visible
+        )
+
+        assert (
+            "The review input must use a .csv filename."
+            not in visible
+        )
+
+
+def test_mapping_browser_filename_length_boundary_is_explicit(
+    tmp_path: Path,
+) -> None:
+    def filename_of_length(
+        length: int,
+    ) -> str:
+        suffix = ".json"
+
+        return (
+            "x"
+            * (
+                length
+                - len(suffix)
+            )
+            + suffix
+        )
+
+    source_bytes = (
+        _BASELINE
+        .read_bytes()
+        .replace(
+            b"sample_id",
+            b"Sample Name",
+            1,
+        )
+    )
+
+    mapping_bytes = json.dumps(
+        {
+            "mapping_specification_version":
+                "1.0.0",
+            "columns": {
+                "sample_id":
+                    "Sample Name",
+            },
+        },
+        sort_keys=True,
+        separators=(
+            ",",
+            ":",
+        ),
+    ).encode(
+        "utf-8"
+    )
+
+    def submit_mapping(
+        client: TestClient,
+        filename: str,
+    ):
+        return client.post(
+            "/reviews",
+            data={
+                "csrf_token":
+                    _csrf(
+                        client
+                    ),
+                "profile_version":
+                    "0.2.0",
+                "mapping_mode":
+                    "explicit",
+            },
+            files={
+                "input_file": (
+                    "mapped.csv",
+                    source_bytes,
+                    "text/csv",
+                ),
+                "mapping_file": (
+                    filename,
+                    mapping_bytes,
+                    "application/json",
+                ),
+            },
+            headers={
+                "Origin":
+                    _ORIGIN,
+                "Sec-Fetch-Site":
+                    "same-origin",
+            },
+            follow_redirects=False,
+        )
+
+    with TestClient(
+        _application(
+            tmp_path
+        ),
+        base_url=_ORIGIN,
+    ) as client:
+        accepted = submit_mapping(
+            client,
+            filename_of_length(
+                255
+            ),
+        )
+
+        assert accepted.status_code == 303
+
+        rejected = submit_mapping(
+            client,
+            filename_of_length(
+                256
+            ),
+        )
+
+        assert rejected.status_code == 422
+
+        visible = _visible_text(
+            rejected.text
+        )
+
+        assert (
+            "The selected filename must be 255 characters or fewer."
+            in visible
+        )
+
+        assert (
+            "The mapping input must use a .json filename."
+            not in visible
+        )
+
+
+def test_compare_renders_entity_key_display_values_without_object_repr(
+    tmp_path: Path,
+) -> None:
+    with TestClient(
+        _application(
+            tmp_path
+        ),
+        base_url=_ORIGIN,
+    ) as client:
+        left_response = _submit(
+            client,
+            _BASELINE,
+        )
+
+        right_response = _submit(
+            client,
+            _SEEDED,
+        )
+
+        assert left_response.status_code == 303
+        assert right_response.status_code == 303
+
+        left = (
+            left_response
+            .headers["location"]
+            .rsplit(
+                "/",
+                1,
+            )[-1]
+        )
+
+        right = (
+            right_response
+            .headers["location"]
+            .rsplit(
+                "/",
+                1,
+            )[-1]
+        )
+
+        response = client.get(
+            (
+                "/compare?left="
+                + left
+                + "&right="
+                + right
+            )
+        )
+
+        assert response.status_code == 200
+
+        visible = _visible_text(
+            response.text
+        )
+
+        assert (
+            "ResultTaggedValueView"
+            not in visible
+        )
+
+        assert (
+            "sample_id=S003"
+            in visible
+        )
+
+
+def test_compare_technical_tokens_have_targeted_wrap_contract(
+) -> None:
+    template = (
+        _ROOT
+        / "src"
+        / "proteomics_csv_validation"
+        / "web"
+        / "templates"
+        / "compare.html"
+    ).read_text(
+        encoding="utf-8"
+    )
+
+    css = (
+        _ROOT
+        / "src"
+        / "proteomics_csv_validation"
+        / "web"
+        / "static"
+        / "app.css"
+    ).read_text(
+        encoding="utf-8"
+    )
+
+    assert (
+        (
+            '<div class="compare-technical-token">'
+            '<strong>Code:</strong> '
+            '{{ finding.code }}</div>'
+        )
+        in template
+    )
+
+    assert (
+        (
+            '<span class="compare-technical-token">'
+            '{{ key.field_name }}='
+            '{{ key.value.display_value }}'
+            '</span>'
+        )
+        in template
+    )
+
+    assert re.search(
+        (
+            r"\.compare-technical-token\s*"
+            r"\{[^}]*"
+            r"overflow-wrap\s*:\s*anywhere"
+        ),
+        css,
+        re.S,
+    )
+
+
+def test_compare_page_has_scoped_inherited_wrap_contract(
+) -> None:
+    template = (
+        _ROOT
+        / "src"
+        / "proteomics_csv_validation"
+        / "web"
+        / "templates"
+        / "compare.html"
+    ).read_text(
+        encoding="utf-8"
+    )
+
+    css = (
+        _ROOT
+        / "src"
+        / "proteomics_csv_validation"
+        / "web"
+        / "static"
+        / "app.css"
+    ).read_text(
+        encoding="utf-8"
+    )
+
+    wrapper_count = template.count(
+        '<div class="compare-page">'
+    )
+
+    scoped_rule = (
+        re.search(
+            (
+                r"\.compare-page\s*"
+                r"\{[^}]*"
+                r"overflow-wrap\s*:\s*anywhere"
+            ),
+            css,
+            re.S,
+        )
+        is not None
+    )
+
+    broad_wrap_absent = all(
+        re.search(
+            pattern,
+            css,
+            re.S,
+        )
+        is None
+        for pattern in (
+            (
+                r"\.result-panel\s+div\s*"
+                r"\{[^}]*overflow-wrap"
+            ),
+            (
+                r"\.result-panel\s+strong\s*"
+                r"\{[^}]*overflow-wrap"
+            ),
+            (
+                r"\.evidence-grid\s+div\s*"
+                r"\{[^}]*overflow-wrap"
+            ),
+        )
+    )
+
+    assert (
+        wrapper_count,
+        scoped_rule,
+        broad_wrap_absent,
+    ) == (
+        1,
+        True,
+        True,
+    )
+
+def test_compare_malformed_side_error_identifies_actual_side(
+    tmp_path,
+) -> None:
+    """Malformed comparison input identifies the actual side in error."""
+
+    from starlette.testclient import TestClient
+
+    from proteomics_csv_validation.web.composition import (
+        create_app,
+    )
+
+    app = create_app(
+        data_root=tmp_path / "state",
+        csrf_secret=(
+            b"compare-side-error-regression-"
+            b"0123456789abcdef0123456789abcdef"
+        ),
+    )
+
+    valid_left = "a" * 32
+    valid_right = "b" * 32
+
+    with TestClient(
+        app,
+        base_url="http://localhost",
+        follow_redirects=False,
+    ) as client:
+
+        left_invalid = client.get(
+            "/compare",
+            params={
+                "left": "malformed-left",
+                "right": valid_right,
+            },
+        )
+
+        assert left_invalid.status_code == 400
+
+        assert (
+            "Left run ID is not a valid review run ID. "
+            "Enter a valid review run ID for the left comparison side."
+            in left_invalid.text
+        )
+
+
+        right_invalid = client.get(
+            "/compare",
+            params={
+                "left": valid_left,
+                "right": "malformed-right",
+            },
+        )
+
+        assert right_invalid.status_code == 400
+
+        assert (
+            "Right run ID is not a valid review run ID. "
+            "Enter a valid review run ID for the right comparison side."
+            in right_invalid.text
+        )
+
+
+        both_invalid = client.get(
+            "/compare",
+            params={
+                "left": "malformed-left",
+                "right": "malformed-right",
+            },
+        )
+
+        assert both_invalid.status_code == 400
+
+        assert (
+            "Left run ID and Right run ID are not valid review run IDs. "
+            "Enter a valid review run ID for each comparison side."
+            in both_invalid.text
+        )
+
+
+        only_left = client.get(
+            "/compare",
+            params={
+                "left": valid_left,
+            },
+        )
+
+        assert only_left.status_code == 200
+        assert valid_left in only_left.text
+
+
+        only_right = client.get(
+            "/compare",
+            params={
+                "right": valid_right,
+            },
+        )
+
+        assert only_right.status_code == 200
+        assert valid_right in only_right.text

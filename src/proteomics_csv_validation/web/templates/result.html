@@ -8,7 +8,7 @@
   aria-labelledby="result-title"
 >
   <p class="eyebrow">
-    Durable review evidence
+    Review evidence
   </p>
 
   <h1 id="result-title">
@@ -16,12 +16,65 @@
   </h1>
 </section>
 
+{% if result.status == "SUCCEEDED" and result.evidence_available %}
+<section
+  class="result-panel"
+  aria-labelledby="review-summary-title"
+>
+  <h2 id="review-summary-title">
+    {% if result.validation_status == "completed" %}
+    Structural review completed
+    {% elif result.validation_status == "stopped_after_ingestion_finding" %}
+    Validation stopped after ingestion finding
+    {% else %}
+    Structural review result
+    {% endif %}
+  </h2>
+
+  <p>
+    <strong>Validation status:</strong>
+    {{ result.validation_status | replace("_", " ") | capitalize }}
+  </p>
+
+  {% if result.validation_status == "stopped_after_ingestion_finding" %}
+  <p class="scope-warning">
+    Execution status SUCCEEDED means the review workflow produced durable
+    result evidence. Validation stopped during CSV ingestion, so later
+    structural checks were not completed.
+  </p>
+  {% endif %}
+
+  <p class="finding-count">
+    <strong>{{ result.total_findings }}</strong>
+    structural finding{% if result.total_findings != 1 %}s{% endif %}
+  </p>
+
+  {% if result.total_findings == 0 %}
+  <p class="scope-warning">
+    No configured structural findings were reported.
+    The displayed evidence supports technical structural review only and
+    does not establish scientific validity, biological correctness,
+    data quality beyond the configured checks, repository acceptance,
+    clinical meaning, or approval.
+  </p>
+  {% else %}
+  <p class="scope-warning">
+    The displayed evidence supports technical structural review only.
+    Findings reflect the configured structural checks and are not
+    scientific approval, a biological interpretation, a clinical
+    interpretation, or a dataset-acceptance decision.
+  </p>
+  {% endif %}
+</section>
+
+{% endif %}
+
 <section
   class="result-panel"
   aria-labelledby="execution-title"
 >
   <h2 id="execution-title">
-    Execution
+    Run execution
   </h2>
 
   <dl class="evidence-grid">
@@ -63,54 +116,6 @@
 {% if result.status == "SUCCEEDED" and result.evidence_available %}
 <section
   class="result-panel"
-  aria-labelledby="review-summary-title"
->
-  <h2 id="review-summary-title">
-    {% if result.validation_status == "completed" %}
-    Structural review completed
-    {% elif result.validation_status == "stopped_after_ingestion_finding" %}
-    Validation stopped after ingestion finding
-    {% else %}
-    Structural review result
-    {% endif %}
-  </h2>
-
-  <p>
-    <strong>Validation status:</strong>
-    {{ result.validation_status | replace("_", " ") | capitalize }}
-  </p>
-
-  {% if result.validation_status == "stopped_after_ingestion_finding" %}
-  <p class="scope-warning">
-    Execution status SUCCEEDED means the review workflow produced durable
-    result evidence. Validation stopped during CSV ingestion, so later
-    structural checks were not completed.
-  </p>
-  {% endif %}
-
-  <p class="finding-count">
-    <strong>{{ result.total_findings }}</strong>
-    structural finding{% if result.total_findings != 1 %}s{% endif %}
-  </p>
-
-  {% if result.total_findings == 0 %}
-  <p class="scope-warning">
-    No configured structural findings were reported.
-    This does not establish scientific validity,
-    biological correctness, data quality beyond the configured checks,
-    repository acceptance, or approval.
-  </p>
-  {% endif %}
-
-  <p class="scope-warning">
-    The displayed evidence supports technical structural review only.
-    It is not scientific approval, a biological interpretation,
-    a clinical interpretation, or a dataset-acceptance decision.
-  </p>
-</section>
-
-<section
-  class="result-panel"
   aria-labelledby="source-evidence-title"
 >
   <h2 id="source-evidence-title">
@@ -144,7 +149,7 @@
   aria-labelledby="configuration-title"
 >
   <h2 id="configuration-title">
-    Selected configuration
+    Review configuration
   </h2>
 
   <dl class="evidence-grid">

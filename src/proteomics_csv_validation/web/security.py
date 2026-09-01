@@ -34,7 +34,7 @@ _SECURITY_HEADERS = (
     ),
     (
         "Referrer-Policy",
-        "no-referrer",
+        "same-origin",
     ),
     (
         "X-Content-Type-Options",

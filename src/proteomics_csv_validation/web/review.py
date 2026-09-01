@@ -68,7 +68,7 @@ _PROFILE_OPTIONS = (
     ),
     (
         "0.1.0",
-        "Historical compatibility",
+        "Processed Sample Summary",
         True,
     ),
 )
@@ -298,10 +298,19 @@ def _safe_display_name(
         )
     ).strip()
 
-    return (
+    name = (
         value
         or "upload"
-    )[:255]
+    )
+
+    if len(
+        name
+    ) > 255:
+        raise ValueError(
+            "The selected filename is not usable."
+        )
+
+    return name
 
 
 async def _stage_upload(
@@ -541,6 +550,67 @@ def _redirect_to_result(
     )
 
 
+def _render_workflow_error(
+    templates: Jinja2Templates,
+    request: Request,
+    *,
+    title: str,
+    heading: str,
+    message: str,
+    status_code: int,
+) -> Response:
+    """Render one user-facing GET workflow failure without internal details."""
+
+    response = templates.TemplateResponse(
+        request=request,
+        name="error.html",
+        context={
+            "request": request,
+            "title": title,
+            "heading": heading,
+            "message": message,
+        },
+        status_code=status_code,
+    )
+
+    response.headers[
+        "Cache-Control"
+    ] = "no-store"
+
+    return response
+
+
+def _render_compare_error(
+    templates: Jinja2Templates,
+    request: Request,
+    *,
+    left_value: str,
+    right_value: str,
+    message: str,
+    status_code: int,
+) -> Response:
+    """Render one Compare GET failure while retaining both selections."""
+
+    response = templates.TemplateResponse(
+        request=request,
+        name="compare.html",
+        context={
+            "request": request,
+            "left_value": left_value,
+            "right_value": right_value,
+            "comparison": None,
+            "error_message": message,
+        },
+        status_code=status_code,
+    )
+
+    response.headers[
+        "Cache-Control"
+    ] = "no-store"
+
+    return response
+
+
 def install_review_routes(
     app: FastAPI,
     *,
@@ -739,11 +809,28 @@ def install_review_routes(
                         status_code=422,
                     )
 
-                input_name = (
-                    _safe_display_name(
-                        input_value.filename
+                try:
+                    input_name = (
+                        _safe_display_name(
+                            input_value.filename
+                        )
                     )
-                )
+
+                except ValueError:
+                    return _render_review(
+                        templates,
+                        request,
+                        runtime,
+                        values=values,
+                        errors=_form_error(
+                            "input-file",
+                            (
+                                "The selected filename must be "
+                                "255 characters or fewer."
+                            ),
+                        ),
+                        status_code=422,
+                    )
 
                 if not input_name.casefold().endswith(
                     ".csv"
@@ -811,11 +898,28 @@ def install_review_routes(
                     )
 
                 if mapping_upload is not None:
-                    mapping_name = (
-                        _safe_display_name(
-                            mapping_upload.filename
+                    try:
+                        mapping_name = (
+                            _safe_display_name(
+                                mapping_upload.filename
+                            )
                         )
-                    )
+
+                    except ValueError:
+                        return _render_review(
+                            templates,
+                            request,
+                            runtime,
+                            values=values,
+                            errors=_form_error(
+                                "mapping-file",
+                                (
+                                    "The selected filename must be "
+                                    "255 characters or fewer."
+                                ),
+                            ),
+                            status_code=422,
+                        )
 
                     if not mapping_name.casefold().endswith(
                         ".json"
@@ -1069,8 +1173,14 @@ def install_review_routes(
             )
             is None
         ):
-            return PlainTextResponse(
-                "Not found",
+            return _render_workflow_error(
+                request.app.state.templates,
+                request,
+                title="Review result not found",
+                heading="Review result not found",
+                message=(
+                    "The requested review result could not be found."
+                ),
                 status_code=404,
             )
 
@@ -1080,8 +1190,14 @@ def install_review_routes(
             )
 
         except ReviewResultNotFound:
-            return PlainTextResponse(
-                "Not found",
+            return _render_workflow_error(
+                request.app.state.templates,
+                request,
+                title="Review result not found",
+                heading="Review result not found",
+                message=(
+                    "The requested review result could not be found."
+                ),
                 status_code=404,
             )
 
@@ -1138,21 +1254,33 @@ def install_review_routes(
             },
         }
 
-        status_code = (
-            503
-            if (
-                view.status
-                == "SUCCEEDED"
-                and not view.evidence_available
+        if (
+            view.status
+            == "SUCCEEDED"
+            and not view.evidence_available
+        ):
+            return _render_workflow_error(
+                request.app.state.templates,
+                request,
+                title="Review evidence unavailable",
+                heading="Review evidence unavailable",
+                message=(
+                    "Verified result evidence is unavailable for this "
+                    "completed review. Detailed review evidence is withheld. "
+                    "No scientific conclusion should be inferred from "
+                    "this state."
+                ),
+                status_code=503,
             )
-            else 200
-        )
 
         return templates.TemplateResponse(
             request=request,
             name="result.html",
             context=context,
-            status_code=status_code,
+            status_code=200,
+            headers={
+                "Cache-Control": "no-store",
+            },
         )
 
     @app.get(
@@ -1176,21 +1304,47 @@ def install_review_routes(
             else ""
         )
 
-        for value in (
-            left_value,
-            right_value,
-        ):
-            if (
-                value
-                and _RUN_ID.fullmatch(
-                    value
+        left_invalid = bool(
+            left_value
+            and _RUN_ID.fullmatch(
+                left_value
+            )
+            is None
+        )
+
+        right_invalid = bool(
+            right_value
+            and _RUN_ID.fullmatch(
+                right_value
+            )
+            is None
+        )
+
+        if left_invalid or right_invalid:
+            if left_invalid and right_invalid:
+                message = (
+                    "Left run ID and Right run ID are not valid review run IDs. "
+                    "Enter a valid review run ID for each comparison side."
                 )
-                is None
-            ):
-                return PlainTextResponse(
-                    "Comparison run ID was not accepted.",
-                    status_code=400,
+            elif left_invalid:
+                message = (
+                    "Left run ID is not a valid review run ID. "
+                    "Enter a valid review run ID for the left comparison side."
                 )
+            else:
+                message = (
+                    "Right run ID is not a valid review run ID. "
+                    "Enter a valid review run ID for the right comparison side."
+                )
+
+            return _render_compare_error(
+                request.app.state.templates,
+                request,
+                left_value=left_value,
+                right_value=right_value,
+                message=message,
+                status_code=400,
+            )
 
         comparison = None
 
@@ -1202,8 +1356,14 @@ def install_review_routes(
                 left_value
                 == right_value
             ):
-                return PlainTextResponse(
-                    "Comparison requires two distinct runs.",
+                return _render_compare_error(
+                    request.app.state.templates,
+                    request,
+                    left_value=left_value,
+                    right_value=right_value,
+                    message=(
+                        "Select two distinct review runs to compare."
+                    ),
                     status_code=400,
                 )
 
@@ -1216,26 +1376,55 @@ def install_review_routes(
                 )
 
             except ReviewComparisonInvalid:
-                return PlainTextResponse(
-                    "Comparison request was not accepted.",
+                return _render_compare_error(
+                    request.app.state.templates,
+                    request,
+                    left_value=left_value,
+                    right_value=right_value,
+                    message=(
+                        "The selected comparison request could not be "
+                        "accepted."
+                    ),
                     status_code=400,
                 )
 
             except ReviewResultNotFound:
-                return PlainTextResponse(
-                    "Comparison run not found.",
+                return _render_compare_error(
+                    request.app.state.templates,
+                    request,
+                    left_value=left_value,
+                    right_value=right_value,
+                    message=(
+                        "One or both selected review runs could not be "
+                        "found."
+                    ),
                     status_code=404,
                 )
 
             except ReviewComparisonIneligible:
-                return PlainTextResponse(
-                    "Comparison requires completed successful reviews.",
+                return _render_compare_error(
+                    request.app.state.templates,
+                    request,
+                    left_value=left_value,
+                    right_value=right_value,
+                    message=(
+                        "Comparison requires two completed successful "
+                        "review runs."
+                    ),
                     status_code=409,
                 )
 
             except ReviewComparisonUnavailable:
-                return PlainTextResponse(
-                    "Comparison evidence is unavailable.",
+                return _render_compare_error(
+                    request.app.state.templates,
+                    request,
+                    left_value=left_value,
+                    right_value=right_value,
+                    message=(
+                        "Verified evidence is unavailable for one or both "
+                        "selected runs, so the comparison cannot be "
+                        "completed."
+                    ),
                     status_code=503,
                 )
 
@@ -1269,6 +1458,7 @@ def install_review_routes(
         include_in_schema=False,
     )
     async def export_result_bundle(
+        request: Request,
         run_id: str,
     ) -> Response:
         if (
@@ -1277,8 +1467,15 @@ def install_review_routes(
             )
             is None
         ):
-            return PlainTextResponse(
-                "Result not found.",
+            return _render_workflow_error(
+                request.app.state.templates,
+                request,
+                title="Result Bundle export unavailable",
+                heading="Result Bundle export unavailable",
+                message=(
+                    "The requested review result could not be found, "
+                    "so no Result Bundle is available for export."
+                ),
                 status_code=404,
             )
 
@@ -1290,20 +1487,41 @@ def install_review_routes(
             )
 
         except ReviewResultNotFound:
-            return PlainTextResponse(
-                "Result not found.",
+            return _render_workflow_error(
+                request.app.state.templates,
+                request,
+                title="Result Bundle export unavailable",
+                heading="Result Bundle export unavailable",
+                message=(
+                    "The requested review result could not be found, "
+                    "so no Result Bundle is available for export."
+                ),
                 status_code=404,
             )
 
         except ReviewExportIneligible:
-            return PlainTextResponse(
-                "Result is not eligible for export.",
+            return _render_workflow_error(
+                request.app.state.templates,
+                request,
+                title="Result Bundle export unavailable",
+                heading="Result Bundle export unavailable",
+                message=(
+                    "Result Bundle export is available only for "
+                    "completed successful reviews."
+                ),
                 status_code=409,
             )
 
         except ReviewExportUnavailable:
-            return PlainTextResponse(
-                "Result export evidence is unavailable.",
+            return _render_workflow_error(
+                request.app.state.templates,
+                request,
+                title="Result Bundle export unavailable",
+                heading="Result Bundle export unavailable",
+                message=(
+                    "Verified result evidence is unavailable, so the "
+                    "Result Bundle cannot be exported."
+                ),
                 status_code=503,
             )
 

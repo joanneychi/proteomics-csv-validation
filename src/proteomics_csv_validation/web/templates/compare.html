@@ -3,15 +3,32 @@
 {% block title %}Compare review runs{% endblock %}
 
 {% block content %}
+<div class="compare-page">
 <section class="page-heading">
   <p class="eyebrow">Review evidence</p>
   <h1>Compare review runs</h1>
   <p>
     Compare exact structural-review evidence from two completed runs.
-    Finding and count differences are structural review evidence only.
-    They are not quality scores or biological interpretation.
+    Deltas are right minus left and describe structural-review differences only.
+    They do not indicate quality, improvement, regression, or biological meaning.
   </p>
 </section>
+
+{% if error_message %}
+<section
+  class="error-summary"
+  role="alert"
+  aria-labelledby="compare-error-title"
+>
+  <h2 id="compare-error-title">
+    Comparison could not be completed
+  </h2>
+
+  <p>
+    {{ error_message }}
+  </p>
+</section>
+{% endif %}
 
 <section class="result-panel" aria-labelledby="compare-selection-heading">
   <h2 id="compare-selection-heading">Select runs</h2>
@@ -21,7 +38,8 @@
       <div>
         <label for="left-run">Left run ID</label>
         <input
-          id="left-run"
+          class="run-id-input"
+      id="left-run"
           name="left"
           type="text"
           value="{{ left_value }}"
@@ -32,7 +50,8 @@
       <div>
         <label for="right-run">Right run ID</label>
         <input
-          id="right-run"
+          class="run-id-input"
+      id="right-run"
           name="right"
           type="text"
           value="{{ right_value }}"
@@ -42,7 +61,7 @@
     </div>
 
     <div class="page-actions">
-      <button type="submit">Compare runs</button>
+      <button class="primary-action" type="submit">Compare runs</button>
       <a href="/history">Review history</a>
     </div>
   </form>
@@ -320,7 +339,7 @@
 
 {% macro render_finding(finding) %}
 <article class="result-panel">
-  <div><strong>Code:</strong> {{ finding.code }}</div>
+  <div class="compare-technical-token"><strong>Code:</strong> {{ finding.code }}</div>
   <div><strong>Category:</strong> {{ finding.category }}</div>
   <div><strong>Severity:</strong> {{ finding.severity }}</div>
   <div><strong>Scope:</strong> {{ finding.scope }}</div>
@@ -346,7 +365,7 @@
     {{ finding.entity.entity_type }}
 
     {% for key in finding.entity.key_parts %}
-    <span>{{ key.field_name }}={{ key.value }}</span>
+    <span class="compare-technical-token">{{ key.field_name }}={{ key.value.display_value }}</span>
     {% endfor %}
   </div>
   {% endif %}
@@ -413,5 +432,6 @@
 <div class="page-actions">
   <a href="/history">Review history</a>
   <a href="/review">Start a structural review</a>
+</div>
 </div>
 {% endblock %}

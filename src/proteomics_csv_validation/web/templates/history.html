@@ -8,7 +8,7 @@
   aria-labelledby="history-title"
 >
   <p class="eyebrow">
-    Durable review history
+    Review evidence
   </p>
 
   <h1 id="history-title">
@@ -16,7 +16,7 @@
   </h1>
 
   <p>
-    Recent locally persisted review runs are shown newest first.
+    Recent locally recorded review runs are listed newest first.
   </p>
 </section>
 
@@ -46,18 +46,20 @@
   </h2>
 
   <p>
-    Completed or pending local review runs will appear here after they are
-    persisted.
+    Local review runs will appear here after they are recorded.
   </p>
 </section>
 
 {% else %}
 {% for entry in history %}
 <section
-  class="result-panel"
+  class="result-panel history-entry"
   aria-labelledby="history-run-{{ loop.index }}"
 >
-  <h2 id="history-run-{{ loop.index }}">
+  <h2
+    id="history-run-{{ loop.index }}"
+    class="technical-display-name"
+  >
     {{ entry.source_display_name }}
   </h2>
 
@@ -87,6 +89,16 @@
     {% endif %}
 
     <div>
+      <dt>Profile version</dt>
+      <dd><code>{{ entry.profile_version }}</code></dd>
+    </div>
+
+    <div>
+      <dt>Mapping mode</dt>
+      <dd>{{ entry.mapping_mode }}</dd>
+    </div>
+
+    <div>
       <dt>Run ID</dt>
       <dd><code>{{ entry.run_id }}</code></dd>
     </div>
@@ -102,16 +114,6 @@
     </div>
 
     <div>
-      <dt>Profile version</dt>
-      <dd>{{ entry.profile_version }}</dd>
-    </div>
-
-    <div>
-      <dt>Mapping mode</dt>
-      <dd>{{ entry.mapping_mode }}</dd>
-    </div>
-
-    <div>
       <dt>Source SHA-256</dt>
       <dd><code>{{ entry.source_sha256 }}</code></dd>
     </div>
@@ -122,22 +124,28 @@
     </div>
   </dl>
 
-  <p class="page-actions">
+  <div class="page-actions">
     <a href="/results/{{ entry.run_id }}">
-      Open run record
+      Open review result
     </a>
-  </p>
+
+    {% if entry.status == "SUCCEEDED" %}
+    <a href="/compare?left={{ entry.run_id }}">
+      Compare this run
+    </a>
+    {% endif %}
+  </div>
 </section>
 {% endfor %}
 {% endif %}
 
-<p class="page-actions">
-  <a href="/review">
-    Run another review
-  </a>
-</p>
-
 <div class="page-actions">
-  <a href="/compare">Compare runs</a>
+  <a href="/review">
+    Start new review
+  </a>
+
+  <a href="/compare">
+    Compare runs
+  </a>
 </div>
 {% endblock %}

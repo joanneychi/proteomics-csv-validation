@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} · Proteomics CSV Validation{% endblock %}
+
+{% block content %}
+<section
+  class="page-heading"
+  aria-labelledby="workflow-error-title"
+>
+  <p class="eyebrow">
+    Review workflow
+  </p>
+
+  <h1 id="workflow-error-title">
+    {{ heading }}
+  </h1>
+
+  <p>
+    {{ message }}
+  </p>
+</section>
+
+<div
+  class="page-actions"
+  aria-label="Recovery options"
+>
+  <a
+    class="secondary-action"
+    href="/review"
+  >
+    Start a structural review
+  </a>
+
+  <a
+    class="secondary-action"
+    href="/history"
+  >
+    Review history
+  </a>
+
+  <a
+    class="secondary-action"
+    href="/compare"
+  >
+    Compare runs
+  </a>
+</div>
+{% endblock %}

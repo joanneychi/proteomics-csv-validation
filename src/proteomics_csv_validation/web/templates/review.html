@@ -80,15 +80,18 @@
 
   <div class="field">
     <label for="profile-version">
-      Review profile
+      Validation profile
     </label>
 
     <p
       id="profile-help"
       class="field-help"
     >
-      The processed-sample profile is the default.
-      Historical compatibility remains available for earlier records.
+      Profiles determine required canonical fields.
+      Profile 0.2.0 is the default six-field contract;
+      0.3.0 is the Reduced Metadata contract, where experimental condition
+      and sample-preparation batch are optional;
+      0.1.0 is retained for historical compatibility.
     </p>
 
     <select
@@ -117,9 +120,10 @@
       id="mapping-mode-help"
       class="field-help"
     >
-      Strict expects canonical headers.
-      Automatic uses deterministic mapping rules.
-      Explicit requires a JSON mapping file.
+      Mapping resolves source headers to canonical field names.
+      Strict requires canonical headers.
+      Automatic applies deterministic mapping rules.
+      Explicit uses a JSON mapping file.
     </p>
 
     <select
@@ -181,9 +185,10 @@
   </h2>
 
   <p>
-    Findings describe the configured structural validation rules.
-    A zero-finding result does not establish scientific validity,
-    biological correctness, or approval.
+    Findings report the configured structural checks for the selected
+    profile and mapping. They do not assess raw mass-spectrometry or
+    peak-list data, normalization or statistics, biological or clinical
+    meaning, repository acceptance, or approval.
   </p>
 </aside>
 
