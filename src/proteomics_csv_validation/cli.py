@@ -1,4 +1,4 @@
-"""Command-line interface for the local validation prototype."""
+"""Command-line interface for the local validation system."""
 
 from __future__ import annotations
 

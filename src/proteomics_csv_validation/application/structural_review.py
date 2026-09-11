@@ -48,7 +48,7 @@ class StructuralReviewFailure(
 
 @dataclass(frozen=True, slots=True)
 class StructuralReviewRequest:
-    """Inputs already supported by the certified structural validator."""
+    """Inputs supported by the structural validator."""
 
     input_path: Path
     profile_version: str | None = None

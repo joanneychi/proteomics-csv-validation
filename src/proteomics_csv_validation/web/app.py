@@ -1,4 +1,4 @@
-"""Secure HTTP shell for the local browser interface."""
+"""HTTP shell for the loopback-only browser interface."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ def create_http_app(
     runtime: ReviewRuntime | None = None,
     workflow: ReviewWorkflowPort | None = None,
 ) -> FastAPI:
-    """Create the secure local HTTP application."""
+    """Create the local loopback HTTP application."""
 
     if (
         runtime is None

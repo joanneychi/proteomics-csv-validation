@@ -1,14 +1,15 @@
 [build-system]
-requires = ["setuptools>=77.0.0"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "proteomics-csv-validation"
-version = "0.5.0"
+version = "0.5.1"
 description = "Local rule-based validation of proteomics processed-sample CSV records."
 readme = "README.md"
 requires-python = ">=3.11"
-license = "LicenseRef-Proprietary"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 authors = [
   { name = "Joanne Y. Chan" }
 ]
@@ -50,6 +51,9 @@ web = [
 [project.scripts]
 proteomics-csv-validate = "proteomics_csv_validation.cli:main"
 proteomics-csv-app = "proteomics_csv_validation.web.cli:main"
+
+[project.urls]
+Repository = "https://github.com/joanneychi/proteomics-csv-validation"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

@@ -1,10 +1,10 @@
-# Local Wheel Deployment Plan
+# Local Wheel Deployment
 
-## Selected method
+## Deployment model
 
-Deploy `proteomics-csv-validation` version `0.5.0` as its verified wheel inside a dedicated Python virtual environment on an authorized local workstation.
+Install `proteomics-csv-validation` version `0.5.1` from the release wheel inside a dedicated Python virtual environment on a local workstation.
 
-The base command-line interface retains zero third-party runtime dependencies. The optional browser application uses the same local package with the `web` extra, binds to loopback only, stores durable run and configuration state in a local SQLite database, and stores Result Bundle artifacts on the local filesystem. The deployment does not create a hosted service, remote API, cloud upload path, or continuous-deployment pipeline.
+The base command-line interface has no third-party runtime dependencies. The optional browser application uses the same local package with the `web` extra. It binds to loopback only, stores run and configuration state in a local SQLite database, and writes Result Bundle artifacts to the local filesystem. The deployment does not create a hosted service, remote API, cloud upload path, or continuous-deployment pipeline.
 
 ## Prerequisites
 
@@ -12,7 +12,7 @@ The base command-line interface retains zero third-party runtime dependencies. T
 - `venv`
 - `pip`
 - local file-system access
-- verified release wheel
+- release wheel
 - authorized compatible CSV inputs
 
 Required runtime environment variables: none.
@@ -22,13 +22,13 @@ Required runtime environment variables: none.
 Compare the wheel with the published SHA-256 record before installation.
 
 ```bash
-shasum -a 256 proteomics_csv_validation-0.5.0-py3-none-any.whl
+shasum -a 256 proteomics_csv_validation-0.5.1-py3-none-any.whl
 ```
 
 Expected SHA-256:
 
 ```text
-d4311d4832960089efcb83906e31d2e96d1c46ee75776f58b044d1ecf45e36b8
+2f1f4b324b40140d7a9333479a7a782d41e565d7041b3a15d6f3eb13381db1c9
 ```
 
 Linux systems may use `sha256sum`. Windows PowerShell may use `Get-FileHash -Algorithm SHA256`.
@@ -38,7 +38,7 @@ Linux systems may use `sha256sum`. Windows PowerShell may use `Get-FileHash -Alg
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install --no-deps ./proteomics_csv_validation-0.5.0-py3-none-any.whl
+python -m pip install --no-deps ./proteomics_csv_validation-0.5.1-py3-none-any.whl
 python -m pip check
 proteomics-csv-validate --version
 ```
@@ -48,7 +48,7 @@ proteomics-csv-validate --version
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install --no-deps ./proteomics_csv_validation-0.5.0-py3-none-any.whl
+python -m pip install --no-deps ./proteomics_csv_validation-0.5.1-py3-none-any.whl
 python -m pip check
 proteomics-csv-validate --version
 ```
@@ -58,7 +58,7 @@ proteomics-csv-validate --version
 Install the same local wheel with the browser extra when the browser review workflow is required:
 
 ```bash
-python -m pip install "./proteomics_csv_validation-0.5.0-py3-none-any.whl[web]"
+python -m pip install "./proteomics_csv_validation-0.5.1-py3-none-any.whl[web]"
 python -m pip check
 proteomics-csv-app --version
 ```
@@ -71,7 +71,7 @@ proteomics-csv-app
 
 ## Smoke-test fixture
 
-The release wheel installs the runtime application. Obtain `baseline_valid.csv` from the certified `v0.5.0` source tree and place it in the deployment working directory.
+The release wheel installs the runtime application. Obtain `baseline_valid.csv` from the `v0.5.1` source tree and place it in the deployment working directory.
 
 Verify the fixture before use:
 
@@ -102,9 +102,9 @@ total_findings: 0
 
 ## Configuration
 
-| Configuration item | Verified value |
+| Configuration item | Value |
 |---|---|
-| Application version | `0.5.0` |
+| Application version | `0.5.1` |
 | Python requirement | `>=3.11` |
 | Runtime dependencies | none |
 | Console command | `proteomics-csv-validate` |
@@ -126,41 +126,38 @@ total_findings: 0
 
 ## Monitoring
 
-Local monitoring records:
+For local deployment checks, record:
 
 - installed application version;
 - wheel checksum verification;
 - installation and `pip check` status;
 - command exit status;
 - processed row and finding counts;
-- report-publication success;
+- report-writing success;
 - unexpected exception output;
 - baseline smoke-test result;
 - browser startup and loopback-bind result when the browser extra is installed.
 
-No remote telemetry or user tracking is required.
+The application does not implement remote telemetry or user tracking.
 
 ## Rollback
 
 1. Preserve the current environment and reports.
 2. Create a separate rollback virtual environment.
-3. Install the prior verified artifact.
+3. Install the prior release artifact.
 4. Confirm the installed version.
 5. Run the baseline smoke test.
-6. Redirect local use to the verified rollback environment.
+6. Redirect local use to the rollback environment after the checks above pass.
 7. Document the reason, time, version, and verification result.
 
-For rollback from `v0.5.0`, `v0.4.0` is the immediate prior verified release. Earlier preserved releases `v0.3.0`, `v0.2.0`, and `v0.1.0` remain historical recovery points. Select a rollback version only after confirming that its documented capabilities meet the required use case.
+For rollback from `v0.5.1`, `v0.5.0` is the immediate prior release. Earlier releases `v0.4.0`, `v0.3.0`, `v0.2.0`, and `v0.1.0` remain historical recovery points. Select a rollback version only after confirming that its documented capabilities meet the required use case.
 
-## Deferred deployment methods
+## Unsupported deployment modes
 
-A container remains optional future portability work. Hosted on-premises or cloud deployment remains deferred because it would require a service interface, network controls, authentication, operational monitoring, infrastructure configuration, and additional security review.
+Version `0.5.1` does not provide a container image or hosted deployment configuration. A hosted deployment would require additional service interfaces, authentication, network controls, monitoring, infrastructure configuration, and security review.
 
-## Current official guidance checked
+## References
 
-- Python Packaging User Guide, virtual environments and local archive installation
 - [Python Packaging User Guide: Installing Packages](https://packaging.python.org/en/latest/tutorials/installing-packages/)
 - [pip documentation: Requirement Specifiers](https://pip.pypa.io/en/stable/reference/requirement-specifiers/)
 - [Python documentation: `venv`](https://docs.python.org/3/library/venv.html)
-
-Retrieval date: September 1, 2026.

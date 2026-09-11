@@ -50,7 +50,7 @@ class PublicationRepository(Protocol):
         byte_count: int,
         created_at: str,
     ) -> RunArtifactRecord:
-        """Persist the authoritative result bundle."""
+        """Persist the result bundle for the run."""
 
     def record_export_artifact(
         self,

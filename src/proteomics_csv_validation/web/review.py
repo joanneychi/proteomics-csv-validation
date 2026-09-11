@@ -1,4 +1,4 @@
-"""Secure server-rendered Review controller."""
+"""Server-rendered Review controller for the local browser workflow."""
 
 from __future__ import annotations
 

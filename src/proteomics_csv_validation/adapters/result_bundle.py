@@ -1,4 +1,4 @@
-"""Adapter from certified validation models to result-bundle JSON v1."""
+"""Adapter from validation models to result-bundle JSON v1."""
 
 from __future__ import annotations
 
@@ -1121,7 +1121,7 @@ def _run_document(
 
 
 class ValidationResultBundleSerializer:
-    """Serialize one completed certified validation result."""
+    """Serialize one completed validation result."""
 
     def serialize(
         self,

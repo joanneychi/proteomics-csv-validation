@@ -1840,7 +1840,7 @@ class ReviewWorkflowPort(
 
 
 class ReviewWorkflowService:
-    """Coordinate browser submission using certified application services."""
+    """Coordinate browser submission using configured application services."""
 
     def __init__(
         self,
