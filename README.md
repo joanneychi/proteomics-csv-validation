@@ -5,7 +5,7 @@
 The system was developed during an eight-week graduate capstone and reached application version `0.4.0` by the end of the project.
 
 - **Author:** Joanne Y. Chan
-- **Application version:** `0.5.0`
+- **Application version:** `0.5.1`
 - **Default profile:** `0.2.0`
 - **Reduced Metadata profile:** `0.3.0`
 - **Repository regression suite:** 342 passing tests
@@ -14,7 +14,7 @@ The system was developed during an eight-week graduate capstone and reached appl
 
 ## Quick start
 
-Begin with the project files already available locally. Run the commands from the repository root, the folder containing `pyproject.toml` and `README.md`.
+Run the following commands from the repository root, the directory containing `pyproject.toml` and `README.md`.
 
 ### Prerequisite
 
@@ -50,9 +50,9 @@ py -m venv .venv
 python -m pip install -e ".[dev,web]"
 ```
 
-`-e` installs the current project in editable mode. `.[dev]` adds pytest and httpx2 for repository verification, while `.[web]` adds the optional browser-application dependencies. The combined `.[dev,web]` installation supports the complete repository suite and the local browser application.
+`-e` installs the current project in editable mode. `.[dev]` adds pytest and httpx2 for repository verification, while `.[web]` adds the optional browser-application dependencies. `.[dev,web]` installs both dependency groups for the complete repository test suite and local browser application.
 
-The base command-line runtime retains zero third-party dependencies. For an editable CLI-only installation, use `python -m pip install -e .`. Leave `.venv` active for the commands below.
+The base command-line runtime has no third-party dependencies. For an editable CLI-only installation, use `python -m pip install -e .`. Leave `.venv` active for the commands below.
 
 ### Verify the installed commands
 
@@ -66,8 +66,8 @@ proteomics-csv-app --help
 Expected version output:
 
 ```text
-proteomics-csv-validate 0.5.0
-proteomics-csv-app 0.5.0
+proteomics-csv-validate 0.5.1
+proteomics-csv-app 0.5.1
 ```
 
 ### Run the optional local browser application
@@ -156,9 +156,9 @@ finding_code_counts:
 python -m pytest
 ```
 
-Expected result: all tests pass.
+Expected result: 342 tests pass.
 
-For verified wheel installation and checksum procedures, see [LOCAL_WHEEL_DEPLOYMENT.md](docs/deployment/LOCAL_WHEEL_DEPLOYMENT.md).
+For wheel installation and checksum verification, see [LOCAL_WHEEL_DEPLOYMENT.md](docs/deployment/LOCAL_WHEEL_DEPLOYMENT.md).
 
 ## Input requirements
 
@@ -181,28 +181,31 @@ The selected profile determines required profile fields. Header mapping resolves
 
 | Term | Meaning in this project |
 |---|---|
-| **Application version** | Version embedded in the executable software, such as `0.5.0` |
-| **Release tag** | Git tag identifying a release snapshot, such as `v0.5.0` |
+| **Application version** | Version embedded in the executable software, such as `0.5.1` |
+| **Release tag** | Git tag identifying a release snapshot, such as `v0.5.1` |
 | **Profile** | Versioned validation contract defining the processed-sample fields and which fields are required |
 | **Record** | One processed sample-summary row in an input CSV |
 | **Key field** | Record identifier field; `sample_id` is the key field in the built-in profiles |
 | **Finding** | One rule-detected condition at one applicable file or row location; a record may produce more than one finding |
 
-Application versions and profile versions advance independently. Release tag `v0.5.0` identifies application version `0.5.0`; profile `0.2.0` remains the default, and `--profile-version 0.3.0` selects Reduced Metadata profile `0.3.0`.
+Application versions and profile versions advance independently. Release tag `v0.5.1` identifies application version `0.5.1`; profile `0.2.0` remains the default, and `--profile-version 0.3.0` selects Reduced Metadata profile `0.3.0`.
 
 ## Release progression
 
-| Release tag | Application version | Default profile | Profiles packaged | Principal application change | Regression tests at tag |
+| Release tag | Application version | Default profile | Profiles packaged | Principal release change | Regression tests at tag |
 |---|---|---|---|---|---:|
 | `v0.1.0` | `0.1.0` | `0.1.0` | `0.1.0` | Initial local validation workflow | 67 |
 | `v0.2.0` | `0.2.0` | `0.1.0` | `0.1.0` | Required-value missingness validation | 75 |
 | `v0.3.0` | `0.3.0` | `0.2.0` | `0.1.0`, `0.2.0` | Automatic and explicit column mapping | 98 |
 | `v0.4.0` | `0.4.0` | `0.2.0` | `0.1.0`, `0.2.0`, `0.3.0` | Explicit profile selection and Reduced Metadata profile `0.3.0` | 111 |
 | `v0.5.0` | `0.5.0` | `0.2.0` | `0.1.0`, `0.2.0`, `0.3.0` | Local browser review with verified result evidence, durable history, deterministic comparison, and exact Result Bundle export | 342 |
+| `v0.5.1` | `0.5.1` | `0.2.0` | `0.1.0`, `0.2.0`, `0.3.0` | Apache-2.0 licensing and `CITATION.cff`; validation logic unchanged | 342 |
 
 `Profiles packaged` lists the profile resources included with each release. Application version `0.3.0` packaged profiles `0.1.0` and `0.2.0` but always loaded profile `0.2.0`. Release `v0.4.0` added `--profile-version` to select a registered profile. Omitting the option defaults to profile `0.2.0`; `--profile-version 0.3.0` selects the Reduced Metadata contract.
 
-`v0.4.0` snapshot contains 111 regression tests. Subsequent tests-only ingestion hardening increased the maintained repository suite to 126 tests without changing application runtime source. Application version `0.5.0` adds the local browser review workflow, verified result evidence, durable history, deterministic comparison, and exact Result Bundle export. The release regression suite contains 342 tests.
+`v0.4.0` snapshot contains 111 regression tests. Fifteen additional ingestion regression tests increased the maintained suite to 126 tests before `v0.5.0`; those additions exercised existing ingestion behavior. Application version `0.5.0` adds the local browser review workflow, verified result evidence, durable history, deterministic comparison, and exact Result Bundle export. The release regression suite contains 342 tests.
+
+Application version `0.5.1` adopts Apache License 2.0, adds `CITATION.cff`, updates package configuration and release documentation, and updates related packaging and version tests. Validation logic and bundled validation profiles are unchanged from `v0.5.0`; the regression suite remains 342 tests.
 
 ## Validation scope
 
@@ -242,7 +245,7 @@ Profile versions identify the record contract applied during validation.
 | Profile | Role in application history | Required-field policy | What changed |
 |---|---|---|---|
 | `0.1.0` | Default in applications `0.1.0` and `0.2.0` | Six required fields | Original profile; descriptions identify synthetic one-study records |
-| `0.2.0` | Default in applications `0.3.0`, `0.4.0`, and `0.5.0` | Six required fields | Descriptions identify study-level records; validation requirements are unchanged from `0.1.0` |
+| `0.2.0` | Default in applications `0.3.0`, `0.4.0`, `0.5.0`, and `0.5.1` | Six required fields | Descriptions identify study-level records; validation requirements are unchanged from `0.1.0` |
 | `0.3.0` | Introduced in application `0.4.0` as the Reduced Metadata option | Four required fields; condition and preparation batch optional | Adds two optional metadata fields |
 
 ### Exact profile `0.1.0` to `0.2.0` change
@@ -537,4 +540,8 @@ Bundled fixtures are synthetic. PXD060583 supplies the public source for the 42-
 
 ## License
 
-Proprietary software. License identifier: `LicenseRef-Proprietary`.
+Application version `0.5.1` is licensed under the Apache License, Version 2.0 (`Apache-2.0`). See [LICENSE](LICENSE). Earlier tagged releases retain the license terms recorded in their respective release snapshots.
+
+Copyright © 2026 Joanne Y. Chan.
+
+Citation information is provided in [CITATION.cff](CITATION.cff).

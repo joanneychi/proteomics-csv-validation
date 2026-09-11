@@ -98,7 +98,7 @@ def test_pyproject_build_backend_supports_license_expression(
             "requires"
         ]
         == [
-            "setuptools>=77.0.0",
+            "setuptools>=77.0.3",
         ]
     )
 
@@ -108,5 +108,32 @@ def test_pyproject_build_backend_supports_license_expression(
         ][
             "license"
         ]
-        == "LicenseRef-Proprietary"
+        == "Apache-2.0"
     )
+
+    assert (
+        document[
+            "project"
+        ][
+            "license-files"
+        ]
+        == [
+            "LICENSE",
+            "NOTICE",
+        ]
+    )
+
+    assert (
+        document[
+            "project"
+        ][
+            "urls"
+        ][
+            "Repository"
+        ]
+        == "https://github.com/joanneychi/proteomics-csv-validation"
+    )
+
+    assert (repository_root / "LICENSE").is_file()
+    assert (repository_root / "NOTICE").is_file()
+    assert (repository_root / "CITATION.cff").is_file()

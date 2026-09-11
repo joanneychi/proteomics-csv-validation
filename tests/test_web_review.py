@@ -1,4 +1,4 @@
-"""HTTP workflow tests for the secure local Review vertical slice."""
+"""HTTP workflow tests for the loopback-only Review vertical slice."""
 
 from __future__ import annotations
 

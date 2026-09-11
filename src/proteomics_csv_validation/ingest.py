@@ -158,7 +158,7 @@ def ingest_csv(
             ),
             message=(
                 "Input exceeded the configured "
-                "prototype byte limit."
+                "input byte limit."
             ),
         )
 
@@ -298,7 +298,7 @@ def ingest_csv(
             ),
             message=(
                 "Input exceeded the configured "
-                "prototype column limit."
+                "input column limit."
             ),
         )
 
@@ -331,7 +331,7 @@ def ingest_csv(
             ),
             message=(
                 "Input exceeded the configured "
-                "prototype row limit."
+                "input row limit."
             ),
         )
 

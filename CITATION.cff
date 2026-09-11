@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use this software in research, please cite it using the metadata below."
+title: "Proteomics CSV Validation System"
+type: software
+authors:
+  - family-names: "Chan"
+    given-names: "Joanne Y."
+version: 0.5.1
+doi: 10.5281/zenodo.22700241
+repository-code: "https://github.com/joanneychi/proteomics-csv-validation"
+license: Apache-2.0

@@ -1,4 +1,4 @@
-"""Package metadata for the proteomics CSV validation prototype."""
+"""Package metadata for the Proteomics CSV Validation System."""
 
 from __future__ import annotations
 

@@ -390,7 +390,7 @@ def _seed_version_1_publication_duplicates(
 
 
 def test_migration_resource_matches_frozen_schema() -> None:
-    """The packaged SQL bytes remain the frozen hardened schema."""
+    """The packaged SQL bytes remain the expected migration schema."""
 
     raw = (
         resources.files(

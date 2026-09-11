@@ -29,7 +29,7 @@ from proteomics_csv_validation.profiles.models import (
 def test_version_surface_uses_installed_distribution_version(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """The command exposes one authoritative package version."""
+    """The command exposes the installed package version."""
 
     with pytest.raises(
         SystemExit

@@ -104,7 +104,7 @@ def _migration_bytes(
     *,
     version: int = 1,
 ) -> bytes:
-    """Load and authenticate one frozen ledger migration."""
+    """Load and verify one pinned ledger migration."""
 
     if version == 1:
         migration_file = _MIGRATION_FILE
@@ -168,7 +168,7 @@ def _migration_statements(
     *,
     version: int = 1,
 ) -> tuple[str, ...]:
-    """Return one authenticated migration as individual statements."""
+    """Return one verified migration as individual statements."""
 
     text = _migration_bytes(
         version=version
@@ -554,7 +554,7 @@ def _backup_v1_for_migration(
     path: Path,
     source_connection: sqlite3.Connection,
 ) -> Path:
-    """Preserve one authenticated version-1 ledger before upgrading."""
+    """Preserve one verified version-1 ledger before upgrading."""
 
     destination = _pre_migration_v2_backup_path(
         path

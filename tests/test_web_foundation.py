@@ -421,7 +421,7 @@ def test_invalid_host_is_rejected_with_security_headers() -> None:
     ] == "DENY"
 
 
-def test_web_foundation_does_not_import_certified_inner_layers() -> None:
+def test_web_foundation_does_not_import_inner_layers() -> None:
     forbidden = (
         "proteomics_csv_validation.adapters",
         "proteomics_csv_validation.domain",
