@@ -63,7 +63,7 @@ jobs:
         run: proteomics-csv-validate --version
 
   build:
-    name: Build release artifacts
+    name: Build distributions
     needs: test
     runs-on: ubuntu-24.04
 
@@ -86,13 +86,3 @@ jobs:
 
       - name: Build source distribution and wheel
         run: python -m build
-
-      - name: Record artifact hashes
-        run: python -c "from pathlib import Path; import hashlib; [print(hashlib.sha256(p.read_bytes()).hexdigest(), p.name) for p in sorted(Path('dist').iterdir()) if p.is_file()]"
-
-      - name: Upload release-candidate artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: proteomics-csv-validation-dist
-          path: dist/*
-          if-no-files-found: error
